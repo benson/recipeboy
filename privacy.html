@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffd33d">
+  <title>Privacy — Recipeboy</title>
+  <style>
+    :root { color-scheme: light; --navy: #082a63; --red: #f53243; --yellow: #ffd33d; --paper: #fffdf5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--navy); background: var(--yellow); font: 17px/1.6 system-ui, sans-serif; }
+    main { width: min(760px, calc(100% - 32px)); margin: 48px auto; padding: clamp(24px, 5vw, 52px); background: var(--paper); border: 5px solid var(--navy); border-radius: 28px; box-shadow: 10px 10px 0 var(--navy); }
+    h1, h2 { line-height: 1.05; text-transform: uppercase; }
+    h1 { margin-top: 0; color: var(--red); font-size: clamp(42px, 9vw, 72px); }
+    h2 { margin-top: 2em; }
+    a { color: #0758d6; font-weight: 800; }
+    .back { display: inline-block; margin-top: 28px; padding: 10px 16px; border: 3px solid var(--navy); border-radius: 999px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Recipeboy privacy</h1>
+    <p><strong>Last updated August 31, 2026.</strong> Recipeboy is a small shared recipe box for Benson and friends.</p>
+
+    <h2>What Recipeboy stores</h2>
+    <p>When you sign in, Clerk provides Recipeboy with an account identifier and basic profile information such as your name and email address. Recipeboy stores your account identifier, chosen display name and mascot settings, recipes you save, “I made this” activity, ratings, and reviews. Recipes, display names, mascot avatars, ratings, reviews, and make activity are visible to other signed-in Recipeboy users.</p>
+
+    <h2>How recipe text is processed</h2>
+    <p>Recipe links may be fetched from their source websites. Pasted recipe text may be sent to OpenAI to turn it into structured ingredients and instructions; the text is sent without your Recipeboy account identity. Clerk provides authentication, and Cloudflare hosts Recipeboy’s API and database.</p>
+
+    <h2>How the data is used</h2>
+    <p>The data is used only to operate the shared recipe box, keep accounts secure, normalize recipes, and show social activity. Recipeboy does not sell personal information or use it for advertising.</p>
+
+    <h2>Your choices</h2>
+    <p>You can edit your Recipeboy profile and delete recipes or your own reviews in the app. For help with account data or deletion, email <a href="mailto:benson.perry@gmail.com">benson.perry@gmail.com</a>.</p>
+
+    <h2>Service providers</h2>
+    <p>Recipeboy relies on Clerk, Cloudflare, GitHub Pages, OpenAI, and the recipe sites whose links you submit. Their own privacy terms also apply to information they process.</p>
+
+    <a class="back" href="/">← Back to Recipeboy</a>
+  </main>
+</body>
+</html>
