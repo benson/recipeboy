@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -52,7 +52,7 @@
         <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
         <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link… or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
         <div class="form-footer">
-          <span id="input-hint">Recipeboy figures out which kind you pasted.</span>
+          <span id="input-hint">Recipeboy cleans it up and saves it.</span>
           <button class="primary-button" type="submit">
             <span>Normalize it!</span>
             <span aria-hidden="true">→</span>
@@ -61,22 +61,6 @@
       </form>
       <div id="form-status" class="form-status" role="status" hidden></div>
     </section>
-
-    <details class="bookmarklet-panel">
-      <summary>
-        <span>Save from stubborn sites</span>
-        <span>Optional one-click helper ↓</span>
-      </summary>
-      <div class="bookmarklet-body">
-        <div>
-          <h3>Give Recipeboy a browser button</h3>
-          <p>Drag the yellow button to your bookmarks bar. When a recipe page won’t import—especially Reddit—open the page and click your new bookmark.</p>
-        </div>
-        <a id="recipeboy-bookmarklet" class="bookmarklet-button" href="javascript:void 0" draggable="true">
-          <span aria-hidden="true">＋</span> Save to Recipeboy
-        </a>
-      </div>
-    </details>
 
     <section class="collection" aria-labelledby="collection-title">
       <div class="collection-head">
@@ -125,10 +109,18 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <aside id="bookmarklet-dock" class="bookmarklet-dock" aria-label="Bookmark helper">
+    <button id="bookmarklet-dismiss" class="bookmarklet-dismiss" type="button" aria-label="Dismiss bookmark helper">×</button>
+    <span class="bookmarklet-eyebrow">Save stubborn sites</span>
+    <a id="recipeboy-bookmarklet" class="bookmarklet-button" href="javascript:void 0" draggable="true">
+      Drag me to bookmark bar <span aria-hidden="true">↗</span>
+    </a>
+    <span class="bookmarklet-note">Then click it from any recipe page.</span>
+  </aside>
   <div class="floating-recipeboy" aria-hidden="true">
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>

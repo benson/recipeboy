@@ -16,6 +16,8 @@ const el = {
   dialog: document.getElementById('recipe-dialog'),
   dialogContent: document.getElementById('dialog-content'),
   toast: document.getElementById('toast'),
+  bookmarkletDock: document.getElementById('bookmarklet-dock'),
+  bookmarkletDismiss: document.getElementById('bookmarklet-dismiss'),
   bookmarklet: document.getElementById('recipeboy-bookmarklet'),
 };
 
@@ -63,10 +65,20 @@ async function normalizeInput(input, button, extra = {}) {
 }
 
 const bookmarkletSource = `(()=>{const tidy=s=>String(s||'').replace(/\\n{3,}/g,'\\n\\n').trim();const title=tidy(document.title.replace(/\\s*[-|:]\\s*Reddit.*$/i,''));const selected=tidy(String(getSelection()));const nodes=[...document.querySelectorAll('shreddit-post,[data-testid="post-container"],article,.usertext-body,.entry')];const score=e=>{const t=tidy(e.innerText);return (/ingredients?|directions?|instructions?|method/i.test(t)?100000:0)+Math.min(t.length,50000)};nodes.sort((a,b)=>score(b)-score(a));const pageText=selected||tidy(nodes[0]?.innerText)||tidy(document.querySelector('main')?.innerText)||tidy(document.body.innerText);if(pageText.length<40){alert('Recipeboy could not find enough recipe text on this page. Select the recipe text and try again.');return}const payload=encodeURIComponent(JSON.stringify({text:(title+'\\n'+pageText).slice(0,48000),sourceUrl:location.href,sourceTitle:title}));open('https://bensonperry.com/recipeboy/#clip='+payload,'_blank','noopener')})()`;
+const BOOKMARKLET_DISMISSED_KEY = 'recipeboy-bookmarklet-dismissed';
+
+try {
+  el.bookmarkletDock.hidden = localStorage.getItem(BOOKMARKLET_DISMISSED_KEY) === '1';
+} catch {}
+
 el.bookmarklet.setAttribute('href', `javascript:${bookmarkletSource}`);
 el.bookmarklet.addEventListener('click', (event) => {
   event.preventDefault();
   showToast('Drag this button to your bookmarks bar!');
+});
+el.bookmarkletDismiss.addEventListener('click', () => {
+  el.bookmarkletDock.hidden = true;
+  try { localStorage.setItem(BOOKMARKLET_DISMISSED_KEY, '1'); } catch {}
 });
 
 function bookmarkletPayload() {
