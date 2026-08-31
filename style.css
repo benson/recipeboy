@@ -185,11 +185,12 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .source-label { display: block; color: var(--red); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recipe-card h3 { margin-top: 9px; font-size: 23px; line-height: 1.08; text-transform: none; }
 .card-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: #58647e; font-size: 14px; line-height: 1.45; }
-.card-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.card-meta { display: flex; flex-wrap: wrap; gap: 5px 0; margin-top: 16px; color: #68728a; font-size: 12px; font-weight: 800; }
+.meta-item { display: inline-flex; align-items: center; }
+.meta-item + .meta-item::before { content: '·'; margin: 0 7px; color: var(--red); font-weight: 900; }
 .pill { padding: 5px 9px; border: 2px solid var(--navy); border-radius: 999px; background: var(--cream); font-size: 12px; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.card-tags span { color: var(--blue); font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
-.card-tags span::before { content: '#'; }
+.recipe-tag { color: var(--ink); font-weight: 800; line-height: 1.2; }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 4px solid var(--navy); }
 .card-actions button { min-height: 52px; border: 0; background: var(--yellow); font-weight: 900; cursor: pointer; }
 .card-actions button + button { border-left: 4px solid var(--navy); background: var(--red); color: var(--white); }
@@ -207,7 +208,8 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .detail-hero { padding: 28px 30px 25px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
 .detail-hero h2 { max-width: 650px; overflow-wrap: anywhere; font-size: clamp(30px, 6vw, 55px); line-height: 1; }
 .detail-hero p { max-width: 620px; margin-bottom: 0; }
-.detail-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+.detail-meta { display: flex; flex-wrap: wrap; gap: 5px 0; margin-top: 17px; color: #4f5870; font-size: 13px; font-weight: 900; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 12px; padding: 22px 30px 0; }
 .action-button { padding: 10px 16px; background: var(--white); }
 .action-button.made { color: var(--white); background: var(--red); }

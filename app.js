@@ -175,11 +175,11 @@ function cardTemplate(recipe) {
       <h3>${esc(recipe.title)}</h3>
       <p class="card-description">${esc(recipe.description || 'A recipe worth keeping.')}</p>
       <div class="card-meta">
-        ${time ? `<span class="pill">◷ ${esc(time)}</span>` : ''}
-        ${recipe.yield ? `<span class="pill">♨ ${esc(recipe.yield)}</span>` : ''}
-        <span class="pill">${recipe.ingredients.length} ingredients</span>
+        ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
+        ${recipe.yield ? `<span class="meta-item">♨ ${esc(recipe.yield)}</span>` : ''}
+        <span class="meta-item">${recipe.ingredients.length} ingredients</span>
       </div>
-      ${(recipe.tags || []).length ? `<div class="card-tags">${recipe.tags.slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
+      ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="card-actions">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
@@ -217,10 +217,10 @@ function detailTemplate(recipe) {
       <h2>${esc(recipe.title)}</h2>
       ${recipe.description ? `<p>${esc(recipe.description)}</p>` : ''}
       <div class="detail-meta">
-        ${time ? `<span class="pill">◷ ${esc(time)}</span>` : ''}
-        ${recipe.yield ? `<span class="pill">♨ ${esc(recipe.yield)}</span>` : ''}
-        ${(recipe.tags || []).slice(0, 4).map((tag) => `<span class="pill">${esc(tag)}</span>`).join('')}
+        ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
+        ${recipe.yield ? `<span class="meta-item">♨ ${esc(recipe.yield)}</span>` : ''}
       </div>
+      ${(recipe.tags || []).length ? `<div class="detail-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="detail-actions">
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
