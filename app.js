@@ -184,7 +184,10 @@ function render() {
 
 function detailTemplate(recipe) {
   const sourceUrl = safeUrl(recipe.sourceUrl);
-  const ingredients = recipe.ingredients.map((ingredient) => `<li>${ingredient.amount ? `<strong>${esc([ingredient.amount, ingredient.unit].filter(Boolean).join(' '))}</strong> ` : ''}${esc(ingredient.item)}</li>`).join('');
+  const ingredients = recipe.ingredients.map((ingredient) => {
+    const quantity = [ingredient.amount, ingredient.unit].filter(Boolean).join(' ');
+    return `<li><strong class="ingredient-name">${esc(ingredient.item)}</strong>${quantity ? `<span class="ingredient-quantity">${esc(quantity)}</span>` : ''}</li>`;
+  }).join('');
   const steps = recipe.instructions.map((step) => `<li>${esc(step)}</li>`).join('');
   const time = minutesLabel(recipe);
   return `<div class="detail-hero">
