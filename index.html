@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -60,6 +60,22 @@
       </form>
       <div id="form-status" class="form-status" role="status" hidden></div>
     </section>
+
+    <details class="bookmarklet-panel">
+      <summary>
+        <span>Save from stubborn sites</span>
+        <span>Optional one-click helper ↓</span>
+      </summary>
+      <div class="bookmarklet-body">
+        <div>
+          <h3>Give Recipeboy a browser button</h3>
+          <p>Drag the yellow button to your bookmarks bar. When a recipe page won’t import—especially Reddit—open the page and click your new bookmark.</p>
+        </div>
+        <a id="recipeboy-bookmarklet" class="bookmarklet-button" href="javascript:void 0" draggable="true">
+          <span aria-hidden="true">＋</span> Save to Recipeboy
+        </a>
+      </div>
+    </details>
 
     <section class="collection" aria-labelledby="collection-title">
       <div class="collection-head">
@@ -112,6 +128,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

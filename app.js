@@ -16,6 +16,7 @@ const el = {
   dialog: document.getElementById('recipe-dialog'),
   dialogContent: document.getElementById('dialog-content'),
   toast: document.getElementById('toast'),
+  bookmarklet: document.getElementById('recipeboy-bookmarklet'),
 };
 
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
@@ -43,9 +44,9 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function normalizeInput(input, button) {
+async function normalizeInput(input, button, extra = {}) {
   try {
-    return await api('/recipes', { method: 'POST', body: JSON.stringify({ input }) });
+    return await api('/recipes', { method: 'POST', body: JSON.stringify({ input, ...extra }) });
   } catch (error) {
     if (error.code !== 'reader_fallback_required' || !error.readerUrl) throw error;
     button.querySelector('span').textContent = 'Trying the backup reader…';
@@ -58,6 +59,25 @@ async function normalizeInput(input, button) {
       method: 'POST',
       body: JSON.stringify({ input, readerMarkdown, readerTitle: payload?.data?.title || '' }),
     });
+  }
+}
+
+const bookmarkletSource = `(()=>{const tidy=s=>String(s||'').replace(/\\n{3,}/g,'\\n\\n').trim();const title=tidy(document.title.replace(/\\s*[-|:]\\s*Reddit.*$/i,''));const selected=tidy(String(getSelection()));const nodes=[...document.querySelectorAll('shreddit-post,[data-testid="post-container"],article,.usertext-body,.entry')];const score=e=>{const t=tidy(e.innerText);return (/ingredients?|directions?|instructions?|method/i.test(t)?100000:0)+Math.min(t.length,50000)};nodes.sort((a,b)=>score(b)-score(a));const pageText=selected||tidy(nodes[0]?.innerText)||tidy(document.querySelector('main')?.innerText)||tidy(document.body.innerText);if(pageText.length<40){alert('Recipeboy could not find enough recipe text on this page. Select the recipe text and try again.');return}const payload=encodeURIComponent(JSON.stringify({text:(title+'\\n'+pageText).slice(0,48000),sourceUrl:location.href,sourceTitle:title}));open('https://bensonperry.com/recipeboy/#clip='+payload,'_blank','noopener')})()`;
+el.bookmarklet.setAttribute('href', `javascript:${bookmarkletSource}`);
+el.bookmarklet.addEventListener('click', (event) => {
+  event.preventDefault();
+  showToast('Drag this button to your bookmarks bar!');
+});
+
+function bookmarkletPayload() {
+  if (!location.hash.startsWith('#clip=')) return null;
+  try {
+    const payload = JSON.parse(decodeURIComponent(location.hash.slice(6)));
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    return payload;
+  } catch {
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    return null;
   }
 }
 
@@ -309,4 +329,31 @@ try {
   el.empty.hidden = false;
   el.empty.querySelector('h3').textContent = 'Recipeboy is taking a snack break.';
   el.empty.querySelector('p').textContent = 'Try refreshing in a moment.';
+}
+
+const clippedRecipe = bookmarkletPayload();
+if (clippedRecipe?.text) {
+  const button = el.form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  button.querySelector('span').textContent = 'Saving from your browser…';
+  try {
+    const result = await normalizeInput(String(clippedRecipe.text), button, {
+      sourceUrl: clippedRecipe.sourceUrl || '',
+      sourceTitle: clippedRecipe.sourceTitle || '',
+    });
+    state.recipes.unshift(result.recipe);
+    render();
+    el.status.textContent = `Saved “${result.recipe.title}” from your browser.`;
+    el.status.className = 'form-status success';
+    el.status.hidden = false;
+    openRecipe(result.recipe.id);
+  } catch (error) {
+    el.input.value = String(clippedRecipe.text).slice(0, 50_000);
+    el.status.textContent = `${error.message} The captured text is in the box so you can tidy it and try again.`;
+    el.status.className = 'form-status';
+    el.status.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.querySelector('span').textContent = 'Normalize it!';
+  }
 }

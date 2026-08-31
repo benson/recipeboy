@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromRedditPayload, redditPostId } from '../worker/worker.js';
+import { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId } from '../worker/worker.js';
 
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);
@@ -49,6 +49,29 @@ Instructions:
   assert.equal(recipe.prepMinutes, 10);
   assert.equal(recipe.ingredients.length, 3);
   assert.equal(recipe.instructions.length, 3);
+});
+
+test('normalizes conversational Reddit recipe headings and step labels', () => {
+  const recipe = parsePlaintext(`Slow Cooker Bowls
+Makes 12 servings
+
+Ingredients I use…
+For the Slow Cooker:
+184 commentssharesavereportcrosspost
+0 :28
+4 lbs lean top sirloin
+3 cups beef broth
+For Garnish:
+12 slices provolone
+
+How I make it…
+Phase 1: Slow Cooker Setup
+Step 1: Place the beef in the slow cooker.
+Step 2: Add the broth and cook on low.`);
+  assert.equal(recipe.ingredients.length, 3);
+  assert.equal(recipe.ingredients[0].item, 'lean top sirloin');
+  assert.equal(recipe.instructions.length, 2);
+  assert.equal(recipe.instructions[0], 'Place the beef in the slow cooker.');
 });
 
 test('normalizes markdown returned by the blocked-site reader', () => {
@@ -150,4 +173,18 @@ test('normalizes a recipe from an OAuth Reddit post payload', () => {
   assert.equal(recipe.sourceName, 'reddit.com');
   assert.equal(recipe.sourceUrl, 'https://www.reddit.com/r/MealPrepSunday/comments/1w236mr/example/');
   assert.match(recipe.imageUrl, /&format=pjpg$/);
+});
+
+test('normalizes a structured recipe returned by indexed AI search', () => {
+  const payload = { output: [{ content: [{ type: 'output_text', text: JSON.stringify({
+    title: 'Indexed Chili', description: 'A Reddit favorite.', yield: '6 bowls', prepMinutes: 10,
+    cookMinutes: 40, totalMinutes: 50, ingredients: ['2 cans black beans', '1 onion'],
+    instructions: ['Chop the onion.', 'Simmer everything.'], tags: ['meal prep'],
+  }) }] }] };
+  const recipe = recipeFromAiSearchPayload(payload, 'https://www.reddit.com/comments/example');
+  assert.equal(recipe.title, 'Indexed Chili');
+  assert.equal(recipe.ingredients[0].amount, '2');
+  assert.equal(recipe.instructions.length, 2);
+  assert.equal(recipe.sourceName, 'reddit.com');
+  assert.equal(recipe.importMethod, 'ai-web-search');
 });

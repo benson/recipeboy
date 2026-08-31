@@ -132,6 +132,18 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .form-status { margin: 0 20px 18px; padding: 10px 13px; border: 3px solid var(--navy); border-radius: 12px; background: #ffe7e9; }
 .form-status.success { background: #e4f6d9; }
 
+.bookmarklet-panel { margin-top: 17px; overflow: hidden; background: var(--white); border: 4px solid var(--navy); border-radius: 17px; box-shadow: 4px 4px 0 var(--navy); }
+.bookmarklet-panel summary { display: flex; justify-content: space-between; gap: 20px; padding: 10px 15px; cursor: pointer; list-style: none; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; }
+.bookmarklet-panel summary::-webkit-details-marker { display: none; }
+.bookmarklet-panel summary span:last-child { color: var(--blue); font-size: 12px; }
+.bookmarklet-panel[open] summary { color: var(--white); background: var(--blue); border-bottom: 4px solid var(--navy); }
+.bookmarklet-panel[open] summary span:last-child { color: var(--yellow); }
+.bookmarklet-body { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 17px 18px 19px; }
+.bookmarklet-body h3 { font-size: 17px; }
+.bookmarklet-body p { max-width: 690px; margin: 5px 0 0; color: #596885; font-size: 14px; line-height: 1.4; }
+.bookmarklet-button { display: inline-flex; flex: none; align-items: center; gap: 8px; padding: 10px 15px; color: var(--navy); background: var(--yellow); border: 4px solid var(--navy); border-radius: 999px; box-shadow: 4px 4px 0 var(--red); font-weight: 900; text-decoration: none; cursor: grab; }
+.bookmarklet-button:active { cursor: grabbing; transform: scale(.97); }
+
 .collection { margin-top: 28px; }
 .collection-head { margin-bottom: 18px; }
 .collection-head h2 { font-size: clamp(28px, 3.5vw, 40px); }
@@ -243,6 +255,10 @@ footer { height: 12px; background: var(--navy); }
   .primary-button { width: 100%; }
   textarea { height: 108px; min-height: 108px; }
   .form-footer > span { display: none; }
+  .bookmarklet-panel summary, .bookmarklet-body { align-items: stretch; flex-direction: column; }
+  .bookmarklet-panel summary { gap: 3px; }
+  .bookmarklet-body { gap: 14px; }
+  .bookmarklet-button { justify-content: center; }
   .collection-title-wrap { align-items: flex-start; }
   .search-wrap { width: 100%; }
   .collection-tools { align-items: stretch; flex-direction: column; }

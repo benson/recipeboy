@@ -6,7 +6,15 @@ The static frontend is hosted by GitHub Pages at [bensonperry.com/recipeboy](htt
 
 Recipeboy first reads standard schema.org `Recipe` data, which is published by most dedicated recipe sites. If a site blocks the direct importer, the Worker retries through Jina Reader and normalizes its recipe markdown. Cooking articles that link to a same-site recipe are followed automatically.
 
-Reddit OAuth importing is implemented, but it requires a Reddit-approved legacy Data API client. Reddit currently restricts new legacy clients to valid moderation use cases, so Recipeboy does not have credentials. If Reddit approves this use case in the future, configure the issued client as Worker secrets:
+Reddit links use OpenAI web search as a paid fallback because Reddit blocks anonymous server readers. The search result is constrained to Reddit and returned through a strict recipe schema before Recipeboy normalizes and stores it. Configure the API key as an encrypted Worker secret:
+
+```sh
+npx wrangler secret put OPENAI_API_KEY --config worker/wrangler.toml
+```
+
+The default model is `gpt-5.4-nano`; override it with the `OPENAI_RECIPE_MODEL` Worker variable if needed. OpenAI currently charges $10 per 1,000 web-search calls plus the selected model's token usage, so occasional friend-group imports should cost only a small amount. Add prepaid credit and set a low project budget in the OpenAI Platform billing dashboard.
+
+Reddit OAuth importing is also implemented, but it requires a Reddit-approved legacy Data API client. If Reddit approves this use case in the future, configure the issued client as Worker secrets:
 
 ```sh
 npx wrangler secret put REDDIT_CLIENT_ID --config worker/wrangler.toml
@@ -15,6 +23,8 @@ npx wrangler secret put REDDIT_USER_AGENT --config worker/wrangler.toml
 ```
 
 Use a descriptive user agent such as `web:recipeboy:v1.0.0 (by /u/your_username)`. The credentials never reach the browser or the recipe database.
+
+The optional “Save to Recipeboy” bookmarklet avoids API cost entirely. It captures selected or visible recipe text in the current browser tab, opens Recipeboy, and submits the text with the original source URL. The captured text travels in the new tab's URL fragment, which is not sent to GitHub Pages.
 
 ## Local development
 
