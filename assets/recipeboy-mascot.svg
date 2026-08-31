@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
+  <title id="title">Recipeboy mascot</title>
+  <desc id="desc">A cheerful garlic bulb holding a spoon and giving a thumbs up.</desc>
+  <g stroke="#102A5A" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <!-- spoon -->
+    <path fill="#FFD43B" d="M135 263 91 154c-17-43 4-91 45-108 41-17 88 5 105 48 17 43-2 91-43 108l-26 10 35 86z"/>
+    <ellipse cx="164" cy="118" rx="45" ry="58" fill="#FFD43B" transform="rotate(-21 164 118)"/>
+    <path fill="none" stroke-width="12" d="M143 77c23-10 48 3 58 29 9 25-1 53-24 63"/>
+    <!-- leafy garlic top -->
+    <path fill="#65B84A" d="M290 166c-1-61 18-108 59-141 8 50 0 95-24 136 32-47 71-75 117-84-17 49-49 85-96 108 49-26 95-33 139-20-34 41-76 62-128 63z"/>
+    <!-- arms behind body -->
+    <path fill="none" d="M196 329c-43-17-71-3-88 39"/>
+    <path fill="#195CCB" d="M111 335c-35-17-64 7-63 39 1 23 19 43 45 43 29 0 48-22 45-49-2-14-11-26-27-33z"/>
+    <path fill="none" d="M456 337c34 1 63 18 81 51"/>
+    <!-- body -->
+    <path fill="#FFF1B8" d="M315 134c-34 64-104 63-133 139-41 109 22 258 146 269 126 12 226-120 198-242-18-79-83-105-118-163-23 23-44 28-61 9-12 31-20 30-32-12z"/>
+    <!-- face -->
+    <path fill="#FFF1B8" d="M248 299c5-31 20-46 43-44 23 3 33 22 27 56M360 306c3-32 18-47 42-45 23 2 34 21 29 54"/>
+    <circle cx="286" cy="291" r="12" fill="#102A5A" stroke="none"/>
+    <circle cx="399" cy="296" r="12" fill="#102A5A" stroke="none"/>
+    <circle cx="233" cy="348" r="22" fill="#EF3340" stroke="none"/>
+    <circle cx="453" cy="350" r="22" fill="#EF3340" stroke="none"/>
+    <path fill="#EF3340" d="M255 356c23 59 139 68 173-3-49 24-119 25-173 3z"/>
+    <path fill="#FFF1B8" d="M272 365c37 19 92 18 134-2-19 32-104 34-134 2z" stroke="none"/>
+    <!-- legs and shoes -->
+    <path fill="none" d="M276 521v47M389 526v42"/>
+    <path fill="#EF3340" d="M268 547c-23 0-41 18-41 41v15h100v-23c0-18-14-33-32-33z"/>
+    <path fill="#EF3340" d="M383 547h33c22 0 40 18 40 40v16H354v-24c0-18 12-32 29-32z"/>
+    <path fill="none" d="M252 574h48M381 574h48"/>
+    <!-- thumb-up glove -->
+    <path fill="#195CCB" d="M508 398c4-28 3-55 6-81 3-27 39-31 48-6 7 20 0 43-3 60 30-22 59 2 53 31-8 37-43 78-80 81-40 3-66-24-65-55 1-18 15-31 41-30z"/>
+    <path fill="none" d="M511 400c16 15 33 21 51 18"/>
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+{
+  "name": "recipeboy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A tiny shared recipe box for links and loose notes.",
+  "scripts": {
+    "dev": "npx serve . -l 4173",
+    "dev:api": "npx wrangler dev --config worker/wrangler.toml",
+    "test": "node --test tests/*.test.js",
+    "deploy:api": "npx wrangler deploy --config worker/wrangler.toml"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "serve": "^14.2.5",
+    "wrangler": "^4.33.1"
+  }
+}
+

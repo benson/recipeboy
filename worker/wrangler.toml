@@ -1,0 +1,9 @@
+name = "recipeboy-api"
+main = "worker.js"
+compatibility_date = "2026-08-31"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "recipeboy-db"
+database_id = "fa2de50f-6ad7-4133-b4ea-c9f9c41b0b6b"
+

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recipeboy — the friends' recipe box</title>
+  <meta name="description" content="Save recipe links or loose notes, turn them into tidy recipes, and see what your friends actually make.">
+  <meta name="theme-color" content="#FFD43B">
+  <meta property="og:title" content="Recipeboy">
+  <meta property="og:description" content="Feed it a recipe. Get back the useful bits.">
+  <meta property="og:image" content="https://bensonperry.com/recipeboy/assets/recipeboy-mascot.svg">
+  <link rel="icon" href="assets/recipeboy-mascot.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="top-stripe" aria-hidden="true"></div>
+  <header class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow">THE FRIENDS’ RECIPE BOX</div>
+      <h1>RECIPE<span>BOY!</span></h1>
+      <p>Feed him a link or your chaotic cooking notes.<br>He’ll tidy everything up.</p>
+    </div>
+    <img class="mascot" src="assets/recipeboy-mascot.svg" alt="Recipeboy, a smiling garlic bulb with a spoon">
+    <div class="burst burst-one" aria-hidden="true">YUM!</div>
+    <div class="burst burst-two" aria-hidden="true">TIDY!</div>
+  </header>
+
+  <main>
+    <section class="feeder" aria-labelledby="feed-title">
+      <div class="feeder-heading">
+        <div>
+          <span class="step-dot">1</span>
+          <h2 id="feed-title">Feed Recipeboy</h2>
+        </div>
+        <p>A recipe URL or the whole messy thing — both work.</p>
+      </div>
+      <form id="recipe-form">
+        <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
+        <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link…&#10;&#10;or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
+        <div class="form-footer">
+          <span id="input-hint">Recipeboy figures out which kind you pasted.</span>
+          <button class="primary-button" type="submit">
+            <span>Normalize it!</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </form>
+      <div id="form-status" class="form-status" role="status" hidden></div>
+    </section>
+
+    <section class="collection" aria-labelledby="collection-title">
+      <div class="collection-head">
+        <div class="collection-title-wrap">
+          <span class="step-dot blue">2</span>
+          <div>
+            <h2 id="collection-title">The good stuff</h2>
+            <p id="recipe-count">Loading the recipe box…</p>
+          </div>
+        </div>
+        <label class="search-wrap">
+          <span aria-hidden="true">⌕</span>
+          <span class="sr-only">Search recipes</span>
+          <input id="search" type="search" placeholder="Search the stash">
+        </label>
+      </div>
+
+      <div id="recipe-grid" class="recipe-grid" aria-live="polite"></div>
+      <div id="empty-state" class="empty-state" hidden>
+        <img src="assets/recipeboy-mascot.svg" alt="">
+        <div>
+          <h3>His recipe box is hungry.</h3>
+          <p>Paste the first family favorite up above.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="recipe-dialog">
+    <div class="dialog-shell">
+      <button id="dialog-close" class="close-button" aria-label="Close recipe">×</button>
+      <div id="dialog-content"></div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <footer>
+    <img src="assets/recipeboy-mascot.svg" alt="">
+    <span>Good food. Zero life stories before the recipe.</span>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
