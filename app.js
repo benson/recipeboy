@@ -105,11 +105,21 @@ async function copyShoppingList(recipe) {
 }
 
 let toastTimer;
-function showToast(message) {
-  el.toast.textContent = message;
+function showToast(message, action = null) {
+  el.toast.replaceChildren(document.createTextNode(message));
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      await action.run();
+    }, { once: true });
+    el.toast.append(button);
+  }
   el.toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), action ? 15_000 : 2200);
 }
 
 function visibleRecipes() {
@@ -255,7 +265,19 @@ async function deleteRecipe(id) {
     state.activeId = null;
     el.dialog.close();
     render();
-    showToast(`Deleted “${recipe.title}”.`);
+    showToast(`Deleted “${recipe.title}”.`, {
+      label: 'Undo',
+      run: () => restoreRecipe(recipe),
+    });
+  } catch (error) { showToast(error.message); }
+}
+
+async function restoreRecipe(deletedRecipe) {
+  try {
+    const result = await api(`/recipes/${encodeURIComponent(deletedRecipe.id)}/restore`, { method: 'POST' });
+    state.recipes.push(result.recipe);
+    render();
+    showToast(`Restored “${result.recipe.title}”.`);
   } catch (error) { showToast(error.message); }
 }
 

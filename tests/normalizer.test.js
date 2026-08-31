@@ -1,6 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId } from '../worker/worker.js';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId, validatePublicUrl } from '../worker/worker.js';
+
+test('allows public recipe URLs and rejects local network targets', () => {
+  assert.equal(validatePublicUrl('https://example.com/recipe#ingredients').href, 'https://example.com/recipe');
+  for (const url of ['http://localhost/recipe', 'http://127.0.0.1/recipe', 'http://10.0.0.4/recipe', 'http://[::1]/recipe']) {
+    assert.throws(() => validatePublicUrl(url), /private network/);
+  }
+});
+
+test('revalidates redirect destinations before following them', async (context) => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/private' } });
+  };
+  await assert.rejects(() => fetchPublicUrl('https://example.com/recipe'), /private network/);
+  assert.equal(calls, 1);
+});
+
+test('rejects oversized API request bodies before normalization', async () => {
+  const request = new Request('https://recipeboy.test/recipes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: 'x'.repeat(260_000) }),
+  });
+  const response = await worker.fetch(request, {});
+  assert.equal(response.status, 413);
+  assert.match((await response.json()).error, /too large/i);
+});
 
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);

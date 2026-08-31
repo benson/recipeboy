@@ -2,6 +2,8 @@
 
 A tiny, no-login recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, and a shared “I made this” count.
 
+The public API is intentionally anonymous, but mutation endpoints are rate-limited for ordinary human use, oversized requests and recipe pages are rejected, redirects are revalidated before fetching, and deleted recipes are soft-deleted so the UI can offer Undo. All recipe content is escaped before browser rendering and is never executed as code.
+
 The static frontend is hosted by GitHub Pages at [bensonperry.com/recipeboy](https://bensonperry.com/recipeboy/). A small Cloudflare Worker uses D1 for shared storage and extracts schema.org Recipe data from pasted links.
 
 Recipeboy first reads standard schema.org `Recipe` data, which is published by most dedicated recipe sites. If a site blocks the direct importer, the Worker retries through Jina Reader and normalizes its recipe markdown. Cooking articles that link to a same-site recipe are followed automatically.
@@ -48,3 +50,5 @@ python scripts/vectorize-mascot.py
 npx wrangler d1 execute recipeboy-db --remote --file worker/schema.sql
 npm run deploy:api
 ```
+
+Existing databases should apply each file in `worker/migrations` once before deploying the corresponding Worker version.

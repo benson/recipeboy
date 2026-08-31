@@ -1,5 +1,7 @@
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
+const MAX_REQUEST_BODY = 256_000;
+const MAX_REDIRECTS = 5;
 const OPENAI_RECIPE_MODEL = 'gpt-5.4-nano';
 let redditTokenCache = null;
 
@@ -8,11 +10,47 @@ function cors() {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
   };
 }
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors() } });
+}
+
+async function readTextLimited(source, limit, message) {
+  const declaredLength = Number(source.headers?.get('content-length') || 0);
+  if (declaredLength > limit) {
+    const error = new Error(message);
+    error.status = 413;
+    throw error;
+  }
+  if (!source.body) return '';
+
+  const reader = source.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > limit) {
+      await reader.cancel();
+      const error = new Error(message);
+      error.status = 413;
+      throw error;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+async function readJsonRequest(request) {
+  const text = await readTextLimited(request, MAX_REQUEST_BODY, 'That request is too large.');
+  try { return JSON.parse(text || '{}'); } catch { return {}; }
 }
 
 function cleanText(value, limit = 5000) {
@@ -304,11 +342,25 @@ function validatePublicUrl(input) {
   let url;
   try { url = new URL(input); } catch { throw new Error('That does not look like a complete recipe URL.'); }
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Recipe links must start with http:// or https://.');
-  const host = url.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.local') || host === '0.0.0.0' || host === '::1' || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.local') || host === '0.0.0.0' || host.includes(':') || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
     throw new Error('That URL points to a private network.');
   }
+  url.hash = '';
   return url;
+}
+
+async function fetchPublicUrl(input, options = {}) {
+  let url = validatePublicUrl(input);
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+    const response = await fetch(url, { ...options, redirect: 'manual' });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    if (!location) throw new Error('That recipe page returned an invalid redirect.');
+    if (redirects === MAX_REDIRECTS) throw new Error('That recipe page redirected too many times.');
+    url = validatePublicUrl(new URL(location, url).href);
+  }
+  throw new Error('That recipe page redirected too many times.');
 }
 
 function findLinkedRecipeUrl(content, sourceUrl) {
@@ -541,14 +593,13 @@ async function recipeFromUrl(input, env, depth = 0) {
   const readerUrl = `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`;
   let directError = '';
   try {
-    const response = await fetch(url, {
+    const response = await fetchPublicUrl(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Upgrade-Insecure-Requests': '1',
       },
-      redirect: 'follow',
       signal: AbortSignal.timeout(12_000),
     });
     if (!response.ok) {
@@ -559,7 +610,7 @@ async function recipeFromUrl(input, env, depth = 0) {
       if (!contentType.includes('html')) directError = 'That link is not an HTML recipe page.';
       else if (length > MAX_PAGE) directError = 'That recipe page is too large to read directly.';
       else {
-        const html = (await response.text()).slice(0, MAX_PAGE);
+        const html = await readTextLimited(response, MAX_PAGE, 'That recipe page is too large to read directly.');
         const node = extractJsonLd(html);
         if (node) return normalizeRecipe(node, response.url || url.href);
         const linkedRecipe = depth < 2 && canFollowLinkedRecipe(response.url || url.href) ? findLinkedRecipeUrl(html, response.url || url.href) : '';
@@ -577,7 +628,7 @@ async function recipeFromUrl(input, env, depth = 0) {
       signal: AbortSignal.timeout(25_000),
     });
     if (!response.ok) throw new Error(`fallback returned ${response.status}`);
-    const payload = await response.json();
+    const payload = JSON.parse(await readTextLimited(response, MAX_PAGE, 'fallback response was too large'));
     const content = payload?.data?.content || '';
     if (!content) throw new Error('fallback was empty');
     const linkedRecipe = depth < 2 && canFollowLinkedRecipe(url.href) ? findLinkedRecipeUrl(content, url.href) : '';
@@ -601,12 +652,14 @@ function rowToRecipe(row) {
 }
 
 async function listRecipes(env) {
-  const { results } = await env.DB.prepare('SELECT id, data_json, made_count, created_at FROM recipes ORDER BY created_at DESC LIMIT 500').all();
+  const { results } = await env.DB.prepare('SELECT id, data_json, made_count, created_at FROM recipes WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500').all();
   return results.map(rowToRecipe);
 }
 
 async function createRecipe(request, env) {
-  const body = await request.json().catch(() => ({}));
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
   const input = String(body.input || '').trim();
   if (!input) return json({ error: 'Paste a recipe link or some recipe text first.' }, 400);
   if (input.length > MAX_INPUT) return json({ error: 'That recipe is too long. Keep it under 50,000 characters.' }, 413);
@@ -654,9 +707,23 @@ async function markMade(id, env) {
 }
 
 async function deleteRecipe(id, env) {
-  const row = await env.DB.prepare('DELETE FROM recipes WHERE id = ? RETURNING id').bind(id).first();
+  const deletedAt = new Date().toISOString();
+  const row = await env.DB.prepare('UPDATE recipes SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL RETURNING id').bind(deletedAt, id).first();
   if (!row) return json({ error: 'Recipe not found.' }, 404);
   return json({ id, deleted: true });
+}
+
+async function restoreRecipe(id, env) {
+  const row = await env.DB.prepare('UPDATE recipes SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL RETURNING id, data_json, made_count, created_at').bind(id).first();
+  if (!row) return json({ error: 'Recipe not found or already restored.' }, 404);
+  return json({ recipe: rowToRecipe(row) });
+}
+
+async function rateLimit(request, limiter, message) {
+  if (!limiter?.limit) return null;
+  const key = request.headers.get('cf-connecting-ip') || 'local';
+  const { success } = await limiter.limit({ key });
+  return success ? null : json({ error: message }, 429);
 }
 
 export default {
@@ -667,11 +734,25 @@ export default {
     try {
       if (request.method === 'GET' && path === '/') return json({ ok: true, service: 'recipeboy-api' });
       if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env) });
-      if (request.method === 'POST' && path === '/recipes') return createRecipe(request, env);
+      if (request.method === 'POST' && path === '/recipes') {
+        const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
+        return limited || createRecipe(request, env);
+      }
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
-      if (request.method === 'POST' && madeMatch) return markMade(madeMatch[1], env);
+      if (request.method === 'POST' && madeMatch) {
+        const limited = await rateLimit(request, env.MADE_RATE_LIMITER, 'Recipeboy believes you. Give the button a minute.');
+        return limited || markMade(madeMatch[1], env);
+      }
+      const restoreMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/restore$/);
+      if (request.method === 'POST' && restoreMatch) {
+        const limited = await rateLimit(request, env.DELETE_RATE_LIMITER, 'Give Recipeboy a minute before changing more recipes.');
+        return limited || restoreRecipe(restoreMatch[1], env);
+      }
       const recipeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)$/);
-      if (request.method === 'DELETE' && recipeMatch) return deleteRecipe(recipeMatch[1], env);
+      if (request.method === 'DELETE' && recipeMatch) {
+        const limited = await rateLimit(request, env.DELETE_RATE_LIMITER, 'Give Recipeboy a minute before deleting more recipes.');
+        return limited || deleteRecipe(recipeMatch[1], env);
+      }
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
       console.error(error);
@@ -680,4 +761,4 @@ export default {
   },
 };
 
-export { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId };
+export { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId, validatePublicUrl };

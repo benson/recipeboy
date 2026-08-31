@@ -7,3 +7,26 @@ binding = "DB"
 database_name = "recipeboy-db"
 database_id = "fa2de50f-6ad7-4133-b4ea-c9f9c41b0b6b"
 
+[[ratelimits]]
+name = "CREATE_RATE_LIMITER"
+namespace_id = "726931001"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[[ratelimits]]
+name = "DELETE_RATE_LIMITER"
+namespace_id = "726931002"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[ratelimits]]
+name = "MADE_RATE_LIMITER"
+namespace_id = "726931003"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
