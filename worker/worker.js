@@ -220,7 +220,7 @@ function parseReaderMarkdown(markdown, sourceUrl = '', suppliedTitle = '') {
     const match = block.match(/^\s*\d+[.)]\s+([\s\S]+)/);
     if (!match) continue;
     const withoutImageTail = match[1].split(/\n\s*!\[/)[0];
-    const step = cleanMarkdown(withoutImageTail);
+    const step = cleanMarkdown(withoutImageTail).replace(/\s+Serious Eats\s*\/\s*[\p{L}\s.'’-]+$/iu, '').trim();
     if (step) instructions.push(step);
   }
   if (!instructions.length) {

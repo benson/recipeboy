@@ -77,6 +77,8 @@ For the chicken:
 
 1. Marinate the chicken.
 
+Serious Eats / Example Person
+
 2. Cook until browned and serve.
 
 ## Notes
@@ -88,4 +90,5 @@ Eat immediately.`, 'https://example.com/dinner', 'Chicken and Rice');
   assert.equal(recipe.totalMinutes, 70);
   assert.equal(recipe.ingredients.length, 2);
   assert.equal(recipe.instructions.length, 2);
+  assert.equal(recipe.instructions[0], 'Marinate the chicken.');
 });
