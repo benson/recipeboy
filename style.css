@@ -298,7 +298,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .friend-review p { margin-top: 5px; color: var(--ink); white-space: pre-wrap; }
 
 .profile-dialog { width: min(860px, calc(100% - 28px)); }
-.profile-shell { width: 100%; box-shadow: 10px 10px 0 var(--blue); }
+.profile-shell { width: 100%; overflow-x: hidden; box-shadow: 10px 10px 0 var(--blue); }
 .profile-shell > .close-button, .list-shell > .close-button { position: absolute; top: 14px; right: 14px; float: none; margin: 0; }
 .profile-hero { display: flex; align-items: center; gap: 26px; width: 100%; padding: 26px 84px 26px 30px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
 .profile-hero h2 { margin-top: 4px; font-size: clamp(30px,5vw,48px); line-height: 1; }
@@ -326,7 +326,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .profile-actions .primary-button { width: auto; }
 
 .list-dialog { width: min(560px, calc(100% - 28px)); }
-.list-shell { width: 100%; box-shadow: 10px 10px 0 var(--green); }
+.list-shell { width: 100%; overflow-x: hidden; box-shadow: 10px 10px 0 var(--green); }
 .list-hero { width: 100%; padding: 28px 84px 23px 28px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
 .list-hero h2 { margin-top: 4px; font-size: clamp(28px, 6vw, 42px); line-height: 1; }
 .list-hero p { margin: 8px 0 0; color: #53617c; font-weight: 800; }
