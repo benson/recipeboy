@@ -8,13 +8,15 @@ The static frontend is hosted by GitHub Pages at [bensonperry.com/recipeboy](htt
 
 Recipeboy first reads standard schema.org `Recipe` data, which is published by most dedicated recipe sites. If a site blocks the direct importer, the Worker retries through Jina Reader and normalizes its recipe markdown. Cooking articles that link to a same-site recipe are followed automatically.
 
+Pasted recipe text—including text sent by the bookmarklet—is cleaned by the low-cost OpenAI model through a strict recipe schema. The model is told to preserve only facts in the paste, omit equipment and unrelated commentary, and treat section labels as organization rather than titles or numbered steps. If the API is unavailable or rejects the input, Recipeboy automatically falls back to its deterministic plaintext parser.
+
 Reddit links use OpenAI web search as a paid fallback because Reddit blocks anonymous server readers. The search result is constrained to Reddit and returned through a strict recipe schema before Recipeboy normalizes and stores it. Configure the API key as an encrypted Worker secret:
 
 ```sh
 npx wrangler secret put OPENAI_API_KEY --config worker/wrangler.toml
 ```
 
-The default model is `gpt-5.4-nano`; override it with the `OPENAI_RECIPE_MODEL` Worker variable if needed. OpenAI currently charges $10 per 1,000 web-search calls plus the selected model's token usage, so occasional friend-group imports should cost only a small amount. Add prepaid credit and set a low project budget in the OpenAI Platform billing dashboard.
+The default model is `gpt-5.4-nano`; override it with the `OPENAI_RECIPE_MODEL` Worker variable if needed. Plaintext cleanup uses model tokens only; Reddit imports also add the web-search tool fee. Occasional friend-group imports should cost only a small amount. Add prepaid credit and set a low project budget in the OpenAI Platform billing dashboard.
 
 Reddit OAuth importing is also implemented, but it requires a Reddit-approved legacy Data API client. If Reddit approves this use case in the future, configure the issued client as Worker secrets:
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiSearchPayload, recipeFromRedditPayload, redditPostId, validatePublicUrl } from '../worker/worker.js';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl } from '../worker/worker.js';
 
 test('allows public recipe URLs and rejects local network targets', () => {
   assert.equal(validatePublicUrl('https://example.com/recipe#ingredients').href, 'https://example.com/recipe');
@@ -41,6 +41,9 @@ test('splits common ingredient amounts and units', () => {
   assert.deepEqual(parseIngredient('1 1/2 cups all-purpose flour'), { amount: '1 1/2', unit: 'cups', item: 'all-purpose flour' });
   assert.deepEqual(parseIngredient('2 cans black beans'), { amount: '2', unit: 'cans', item: 'black beans' });
   assert.deepEqual(parseIngredient('1 large onion, diced'), { amount: '1', unit: '', item: 'large onion, diced' });
+  assert.deepEqual(parseIngredient('All-purpose flour: 1 1/3 cups'), { amount: '1 1/3', unit: 'cups', item: 'All-purpose flour' });
+  assert.deepEqual(parseIngredient('Fresh pumpkin puree: 2 cups (Casper preferred)'), { amount: '2', unit: 'cups', item: 'Fresh pumpkin puree (Casper preferred)' });
+  assert.deepEqual(parseIngredient('2 each eggs'), { amount: '2', unit: '', item: 'eggs' });
   assert.deepEqual(parseIngredient('salt to taste'), { amount: '', unit: '', item: 'salt to taste' });
 });
 
@@ -79,6 +82,26 @@ Instructions:
   assert.equal(recipe.prepMinutes, 10);
   assert.equal(recipe.ingredients.length, 3);
   assert.equal(recipe.instructions.length, 3);
+});
+
+test('ignores equipment and normalizes ingredient-first quantities', () => {
+  const recipe = parsePlaintext(`Heirloom Pumpkin Pie
+Equipment Needed
+Rolling pin
+9-inch pie plate
+Ingredients
+All-purpose flour: 1 1/3 cups
+Fresh pumpkin puree: 2 cups (Casper preferred)
+Large eggs: 2
+Instructions
+Mix the filling.
+Bake until set.`);
+  assert.equal(recipe.title, 'Heirloom Pumpkin Pie');
+  assert.equal(recipe.description, '');
+  assert.equal(recipe.ingredients.length, 3);
+  assert.deepEqual(recipe.ingredients[0], { amount: '1 1/3', unit: 'cups', item: 'All-purpose flour' });
+  assert.deepEqual(recipe.ingredients[1], { amount: '2', unit: 'cups', item: 'Fresh pumpkin puree (Casper preferred)' });
+  assert.equal(recipe.instructions.length, 2);
 });
 
 test('normalizes conversational Reddit recipe headings and step labels', () => {
@@ -217,4 +240,33 @@ test('normalizes a structured recipe returned by indexed AI search', () => {
   assert.equal(recipe.instructions.length, 2);
   assert.equal(recipe.sourceName, 'reddit.com');
   assert.equal(recipe.importMethod, 'ai-web-search');
+});
+
+test('normalizes messy plaintext returned through the AI recipe schema', () => {
+  const recipe = recipeFromAiPlaintextPayload({
+    output_text: JSON.stringify({
+      title: 'Heirloom Pumpkin Pie', description: 'A from-scratch pumpkin pie.', yield: '1 pie',
+      prepMinutes: 0, cookMinutes: 0, totalMinutes: 0,
+      ingredients: ['1 1/3 cups all-purpose flour', '2 cups pumpkin purée'],
+      instructions: ['Make the crust.', 'Mix the filling and bake.'],
+      tags: ['dessert'],
+    }),
+  });
+  assert.equal(recipe.title, 'Heirloom Pumpkin Pie');
+  assert.equal(recipe.ingredients[0].item, 'all-purpose flour');
+  assert.equal(recipe.importMethod, 'ai-plaintext');
+});
+
+test('falls back to the deterministic plaintext parser when AI cleanup fails', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response('{}', { status: 503 });
+  const recipe = await recipeFromPlaintextWithAi(`Simple Beans
+Ingredients
+2 cans black beans
+Instructions
+Simmer until hot.`, { OPENAI_API_KEY: 'test-key' });
+  assert.equal(recipe.title, 'Simple Beans');
+  assert.equal(recipe.ingredients[0].item, 'black beans');
+  assert.equal(recipe.instructions[0], 'Simmer until hot.');
 });
