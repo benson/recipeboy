@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractJsonLd, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext } from '../worker/worker.js';
+import { extractJsonLd, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown } from '../worker/worker.js';
 
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);
@@ -49,4 +49,43 @@ Instructions:
   assert.equal(recipe.prepMinutes, 10);
   assert.equal(recipe.ingredients.length, 3);
   assert.equal(recipe.instructions.length, 3);
+});
+
+test('normalizes markdown returned by the blocked-site reader', () => {
+  const recipe = parseReaderMarkdown(`A fast, deeply savory dinner for hungry friends.
+
+Prep Time:
+15 mins
+
+Cook Time:
+40 mins
+
+Total Time:
+1 hr 10 mins
+
+Yield:
+Serves 4
+
+## Ingredients
+
+For the chicken:
+
+* 2 pounds chicken thighs
+* 1 tablespoon olive oil
+
+## Directions
+
+1. Marinate the chicken.
+
+2. Cook until browned and serve.
+
+## Notes
+
+Eat immediately.`, 'https://example.com/dinner', 'Chicken and Rice');
+
+  assert.equal(recipe.title, 'Chicken and Rice');
+  assert.equal(recipe.description, 'A fast, deeply savory dinner for hungry friends.');
+  assert.equal(recipe.totalMinutes, 70);
+  assert.equal(recipe.ingredients.length, 2);
+  assert.equal(recipe.instructions.length, 2);
 });

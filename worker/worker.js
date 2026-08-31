@@ -185,6 +185,66 @@ function extractJsonLd(html) {
   return null;
 }
 
+function cleanMarkdown(value) {
+  return cleanText(String(value || '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`>#]/g, ' '));
+}
+
+function markdownSection(markdown, headingPattern) {
+  const heading = new RegExp(`^#{1,4}\\s+(?:${headingPattern})[^\\n]*$`, 'im').exec(markdown);
+  if (!heading) return '';
+  const rest = markdown.slice(heading.index + heading[0].length).replace(/^\s+/, '');
+  const nextHeading = rest.search(/^#{1,4}\s+\S.*$/m);
+  return nextHeading < 0 ? rest : rest.slice(0, nextHeading);
+}
+
+function metadataValue(markdown, labelPattern) {
+  const match = new RegExp(`(?:^|\\n)${labelPattern}:\\s*(?:\\n\\s*)?([^\\n]+)`, 'i').exec(markdown);
+  return cleanMarkdown(match?.[1]);
+}
+
+function parseReaderMarkdown(markdown, sourceUrl = '', suppliedTitle = '') {
+  const ingredientsSection = markdownSection(markdown, 'ingredients?|what you(?:’|\'|’)ll need');
+  const directionsSection = markdownSection(markdown, 'directions?|instructions?|method|steps?');
+  if (!ingredientsSection || !directionsSection) throw new Error('The fallback reader could not find ingredients and directions.');
+
+  const ingredients = [...ingredientsSection.matchAll(/^\s*[*+-]\s+(.+)$/gm)]
+    .map((match) => cleanMarkdown(match[1]))
+    .filter(Boolean);
+
+  const instructions = [];
+  const numbered = directionsSection.split(/\n(?=\s*\d+[.)]\s+)/);
+  for (const block of numbered) {
+    const match = block.match(/^\s*\d+[.)]\s+([\s\S]+)/);
+    if (!match) continue;
+    const withoutImageTail = match[1].split(/\n\s*!\[/)[0];
+    const step = cleanMarkdown(withoutImageTail);
+    if (step) instructions.push(step);
+  }
+  if (!instructions.length) {
+    instructions.push(...[...directionsSection.matchAll(/^\s*[*+-]\s+(.+)$/gm)].map((match) => cleanMarkdown(match[1])).filter(Boolean));
+  }
+
+  const title = suppliedTitle || cleanMarkdown(markdown.match(/^#\s+(.+)$/m)?.[1]) || 'Untitled recipe';
+  const beforeIngredients = markdown.slice(0, markdown.search(/^#{1,4}\s+Ingredients?\b/im));
+  const description = beforeIngredients.split(/\n{2,}/).map(cleanMarkdown).find((paragraph) =>
+    paragraph.length > 30 && !/^(?:by|updated|prep time|cook time|total time|servings?|yield)\b/i.test(paragraph)
+  ) || '';
+
+  return normalizeRecipe({
+    name: title,
+    description,
+    recipeYield: metadataValue(markdown, 'yield') || metadataValue(markdown, 'servings?'),
+    prepTime: metadataValue(markdown, 'prep time'),
+    cookTime: metadataValue(markdown, 'cook time'),
+    totalTime: metadataValue(markdown, 'total time'),
+    recipeIngredient: ingredients,
+    recipeInstructions: instructions,
+  }, sourceUrl);
+}
+
 function validatePublicUrl(input) {
   let url;
   try { url = new URL(input); } catch { throw new Error('That does not look like a complete recipe URL.'); }
@@ -198,16 +258,57 @@ function validatePublicUrl(input) {
 
 async function recipeFromUrl(input) {
   const url = validatePublicUrl(input);
-  const response = await fetch(url, { headers: { 'User-Agent': 'Recipeboy/1.0 (+https://bensonperry.com/recipeboy/)', Accept: 'text/html,application/xhtml+xml' }, redirect: 'follow', signal: AbortSignal.timeout(12_000) });
-  if (!response.ok) throw new Error(`That recipe page returned ${response.status}. Try pasting the recipe text instead.`);
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('html')) throw new Error('That link is not an HTML recipe page. Try pasting the recipe text instead.');
-  const length = Number(response.headers.get('content-length') || 0);
-  if (length > MAX_PAGE) throw new Error('That recipe page is too large to read. Try pasting the recipe text instead.');
-  const html = (await response.text()).slice(0, MAX_PAGE);
-  const node = extractJsonLd(html);
-  if (!node) throw new Error('I could not find a structured recipe on that page. Paste its ingredients and steps instead.');
-  return normalizeRecipe(node, response.url || url.href);
+  const readerUrl = `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`;
+  let directError = '';
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) {
+      directError = `That recipe page returned ${response.status}.`;
+    } else {
+      const contentType = response.headers.get('content-type') || '';
+      const length = Number(response.headers.get('content-length') || 0);
+      if (!contentType.includes('html')) directError = 'That link is not an HTML recipe page.';
+      else if (length > MAX_PAGE) directError = 'That recipe page is too large to read directly.';
+      else {
+        const html = (await response.text()).slice(0, MAX_PAGE);
+        const node = extractJsonLd(html);
+        if (node) return normalizeRecipe(node, response.url || url.href);
+        directError = 'I could not find structured recipe data on that page.';
+      }
+    }
+  } catch (error) {
+    directError = error?.name === 'TimeoutError' ? 'That recipe page took too long to respond.' : 'That recipe page blocked the direct reader.';
+  }
+
+  try {
+    const response = await fetch(readerUrl, {
+      headers: { Accept: 'application/json', 'X-Timeout': '20' },
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!response.ok) throw new Error(`fallback returned ${response.status}`);
+    const payload = await response.json();
+    const content = payload?.data?.content || '';
+    if (!content) throw new Error('fallback was empty');
+    return parseReaderMarkdown(content, url.href, cleanText(payload?.data?.title, 160));
+  } catch (error) {
+    console.warn('Recipe reader fallback failed', {
+      host: url.host,
+      message: error?.message || String(error),
+    });
+    const importError = new Error(`${directError} Recipeboy is asking your browser to try the backup reader.`);
+    importError.code = 'reader_fallback_required';
+    importError.readerUrl = readerUrl;
+    throw importError;
+  }
 }
 
 function rowToRecipe(row) {
@@ -226,8 +327,22 @@ async function createRecipe(request, env) {
   if (!input) return json({ error: 'Paste a recipe link or some recipe text first.' }, 400);
   if (input.length > MAX_INPUT) return json({ error: 'That recipe is too long. Keep it under 50,000 characters.' }, 413);
   let recipe;
-  try { recipe = /^https?:\/\//i.test(input) ? await recipeFromUrl(input) : parsePlaintext(input); }
-  catch (error) { return json({ error: error.message || 'I could not normalize that recipe.' }, 422); }
+  try {
+    if (/^https?:\/\//i.test(input) && body.readerMarkdown) {
+      const validatedUrl = validatePublicUrl(input);
+      const readerMarkdown = String(body.readerMarkdown).slice(0, 200_000);
+      if (!readerMarkdown) throw new Error('The backup reader returned an empty recipe.');
+      recipe = parseReaderMarkdown(readerMarkdown, validatedUrl.href, cleanText(body.readerTitle, 160));
+    } else {
+      recipe = /^https?:\/\//i.test(input) ? await recipeFromUrl(input) : parsePlaintext(input);
+    }
+  } catch (error) {
+    return json({
+      error: error.message || 'I could not normalize that recipe.',
+      ...(error.code ? { code: error.code } : {}),
+      ...(error.readerUrl ? { readerUrl: error.readerUrl } : {}),
+    }, 422);
+  }
   const id = crypto.randomUUID().slice(0, 12);
   const createdAt = new Date().toISOString();
   await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)')
@@ -260,4 +375,4 @@ export default {
   },
 };
 
-export { extractJsonLd, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext };
+export { extractJsonLd, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown };

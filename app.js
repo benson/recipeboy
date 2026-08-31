@@ -33,8 +33,30 @@ async function api(path, options = {}) {
     headers: options.body ? { 'Content-Type': 'application/json', ...(options.headers || {}) } : options.headers,
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Something went sideways.');
+  if (!response.ok) {
+    const error = new Error(data.error || 'Something went sideways.');
+    Object.assign(error, data);
+    throw error;
+  }
   return data;
+}
+
+async function normalizeInput(input, button) {
+  try {
+    return await api('/recipes', { method: 'POST', body: JSON.stringify({ input }) });
+  } catch (error) {
+    if (error.code !== 'reader_fallback_required' || !error.readerUrl) throw error;
+    button.querySelector('span').textContent = 'Trying the backup reader…';
+    const response = await fetch(error.readerUrl, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`The backup reader returned ${response.status}. Try pasting the recipe text instead.`);
+    const payload = await response.json();
+    const readerMarkdown = payload?.data?.content || '';
+    if (!readerMarkdown) throw new Error('The backup reader could not find the recipe. Try pasting its text instead.');
+    return api('/recipes', {
+      method: 'POST',
+      body: JSON.stringify({ input, readerMarkdown, readerTitle: payload?.data?.title || '' }),
+    });
+  }
 }
 
 function minutesLabel(recipe) {
@@ -178,7 +200,7 @@ async function submitRecipe(event) {
   button.querySelector('span').textContent = /^https?:\/\//i.test(input) ? 'Reading that page…' : 'Tidying your notes…';
   el.status.hidden = true;
   try {
-    const result = await api('/recipes', { method: 'POST', body: JSON.stringify({ input }) });
+    const result = await normalizeInput(input, button);
     state.recipes.unshift(result.recipe);
     el.input.value = '';
     el.status.textContent = `Saved “${result.recipe.title}” to the shared box.`;
