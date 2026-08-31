@@ -13,33 +13,30 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
   <header class="hero">
     <div class="hero-copy">
-      <div class="eyebrow">THE FRIENDS’ RECIPE BOX</div>
       <h1>RECIPE<span>BOY!</span></h1>
-      <p>Feed him a link or your chaotic cooking notes.<br>He’ll tidy everything up.</p>
     </div>
-    <img class="mascot" src="assets/recipeboy-mascot.svg" alt="Recipeboy, a smiling garlic bulb with a spoon">
-    <div class="burst burst-one" aria-hidden="true">YUM!</div>
-    <div class="burst burst-two" aria-hidden="true">TIDY!</div>
+    <div class="mascot-stage">
+      <img class="mascot" src="assets/recipeboy-mascot.svg" alt="Recipeboy, a smiling garlic bulb with a spoon">
+      <div class="burst burst-one" aria-hidden="true">YUM!</div>
+      <div class="burst burst-two" aria-hidden="true">TIDY!</div>
+    </div>
   </header>
 
   <main>
     <section class="feeder" aria-labelledby="feed-title">
       <div class="feeder-heading">
-        <div>
-          <span class="step-dot">1</span>
-          <h2 id="feed-title">Feed Recipeboy</h2>
-        </div>
-          <p>Links or messy recipe text — both work.</p>
+        <h2 id="feed-title">Feed Recipeboy</h2>
+        <p>Links or messy recipe text — both work.</p>
       </div>
       <form id="recipe-form">
         <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
-        <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link…&#10;&#10;or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
+        <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link… or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
         <div class="form-footer">
           <span id="input-hint">Recipeboy figures out which kind you pasted.</span>
           <button class="primary-button" type="submit">
@@ -54,7 +51,6 @@
     <section class="collection" aria-labelledby="collection-title">
       <div class="collection-head">
         <div class="collection-title-wrap">
-          <span class="step-dot blue">2</span>
           <div>
             <h2 id="collection-title">The good stuff</h2>
             <p id="recipe-count">Loading the recipe box…</p>
