@@ -89,6 +89,10 @@
           </div>
         </div>
         <div class="collection-tools">
+          <label class="list-filter-wrap">
+            <span>List</span>
+            <select id="list-filter" aria-label="Show a recipe list"><option value="">All recipes</option></select>
+          </label>
           <label class="search-wrap">
             <span aria-hidden="true">⌕</span>
             <span class="sr-only">Search recipes</span>
@@ -133,6 +137,13 @@
     </div>
   </dialog>
 
+  <dialog id="list-dialog" class="list-dialog">
+    <div class="dialog-shell list-shell">
+      <button id="list-close" class="close-button" aria-label="Close recipe lists">×</button>
+      <div id="list-content"></div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <aside id="bookmarklet-dock" class="bookmarklet-dock" aria-label="Bookmark helper" hidden>
     <button id="bookmarklet-dismiss" class="bookmarklet-dismiss" type="button" aria-label="Dismiss bookmark helper">×</button>
@@ -146,6 +157,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=13"></script>
+  <script type="module" src="app.js?v=14"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], profile: null, query: '', tag: '', sort: 'newest', activeId: null, confirmDeleteId: null };
+const state = { recipes: [], lists: [], profile: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, listRecipeId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -14,11 +14,14 @@ const el = {
   count: document.getElementById('recipe-count'),
   search: document.getElementById('search'),
   sort: document.getElementById('sort'),
+  listFilter: document.getElementById('list-filter'),
   tagFilters: document.getElementById('tag-filters'),
   dialog: document.getElementById('recipe-dialog'),
   dialogContent: document.getElementById('dialog-content'),
   profileDialog: document.getElementById('profile-dialog'),
   profileContent: document.getElementById('profile-content'),
+  listDialog: document.getElementById('list-dialog'),
+  listContent: document.getElementById('list-content'),
   toast: document.getElementById('toast'),
   bookmarkletDock: document.getElementById('bookmarklet-dock'),
   bookmarkletDismiss: document.getElementById('bookmarklet-dismiss'),
@@ -41,18 +44,44 @@ const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
 
-const AVATAR_DEFAULT = { background: 'sunshine', accessory: 'none', badge: 'spoon' };
-const AVATAR_ACCESSORIES = { none: '', chef: '🧑‍🍳', crown: '👑', cowboy: '🤠', party: '🥳' };
-const AVATAR_BADGES = { spoon: '🥄', heart: '♥', fire: '🔥', star: '★' };
+const AVATAR_DEFAULT = { background: 'sunshine', character: 'classic', flavor: 'savory' };
+const AVATAR_CHARACTERS = {
+  classic: { label: 'Garlic original', image: 'assets/recipeboy-mascot-flat.png' },
+  chef: { label: 'Whisk chef', image: 'assets/avatars/character-chef.png' },
+  shallot: { label: 'Fork shallot', image: 'assets/avatars/character-shallot.png' },
+  ginger: { label: 'Ginger sticks', image: 'assets/avatars/character-ginger.png' },
+  scallion: { label: 'Tong scallion', image: 'assets/avatars/character-scallion.png' },
+  chili: { label: 'Spatula chili', image: 'assets/avatars/character-chili.png' },
+  carrot: { label: 'Peeler carrot', image: 'assets/avatars/character-carrot.png' },
+  basil: { label: 'Shears basil', image: 'assets/avatars/character-basil.png' },
+  lemon: { label: 'Zester lemon', image: 'assets/avatars/character-lemon.png' },
+  tomato: { label: 'Spoon tomato', image: 'assets/avatars/character-tomato.png' },
+};
+const AVATAR_FLAVORS = {
+  savory: { label: 'Savory', image: 'assets/avatars/flavor-savory.png' },
+  spicy: { label: 'Spicy', image: 'assets/avatars/flavor-spicy.png' },
+  umami: { label: 'Umami', image: 'assets/avatars/flavor-umami.png' },
+  minty: { label: 'Minty', image: 'assets/avatars/flavor-minty.png' },
+  sweet: { label: 'Sweet', image: 'assets/avatars/flavor-sweet.png' },
+  smoky: { label: 'Smoky', image: 'assets/avatars/flavor-smoky.png' },
+};
+
+function normalizedClientAvatar(value = {}) {
+  const legacyCharacter = { chef: 'chef' };
+  const legacyFlavor = { fire: 'spicy', heart: 'sweet', star: 'umami', spoon: 'savory' };
+  const avatar = { ...AVATAR_DEFAULT, ...value };
+  avatar.character = AVATAR_CHARACTERS[avatar.character] ? avatar.character : (legacyCharacter[avatar.accessory] || 'classic');
+  avatar.flavor = AVATAR_FLAVORS[avatar.flavor] ? avatar.flavor : (legacyFlavor[avatar.badge] || 'savory');
+  return avatar;
+}
 
 function avatarTemplate(profile = {}, extraClass = '') {
-  const avatar = { ...AVATAR_DEFAULT, ...(profile.avatar || {}) };
-  const accessory = AVATAR_ACCESSORIES[avatar.accessory] || '';
-  const badge = AVATAR_BADGES[avatar.badge] || AVATAR_BADGES.spoon;
+  const avatar = normalizedClientAvatar(profile.avatar || {});
+  const character = AVATAR_CHARACTERS[avatar.character] || AVATAR_CHARACTERS.classic;
+  const flavor = AVATAR_FLAVORS[avatar.flavor] || AVATAR_FLAVORS.savory;
   return `<span class="recipeboy-avatar avatar-${esc(avatar.background)} ${esc(extraClass)}">
-    <img src="assets/recipeboy-mascot.svg" alt="">
-    ${accessory ? `<span class="avatar-accessory" aria-hidden="true">${accessory}</span>` : ''}
-    <span class="avatar-badge" aria-hidden="true">${badge}</span>
+    <img class="avatar-character" src="${esc(character.image)}" alt="">
+    <span class="avatar-flavor" aria-hidden="true"><img src="${esc(flavor.image)}" alt=""></span>
   </span>`;
 }
 
@@ -203,7 +232,9 @@ function showToast(message, action = null) {
 
 function visibleRecipes() {
   const query = state.query.trim().toLowerCase();
-  const filtered = state.recipes.filter((recipe) => (!state.tag || (recipe.tags || []).includes(state.tag)) && (!query || [
+  const activeList = state.lists.find((list) => list.id === state.listId);
+  const listedIds = activeList ? new Set(activeList.recipeIds) : null;
+  const filtered = state.recipes.filter((recipe) => (!listedIds || listedIds.has(recipe.id)) && (!state.tag || (recipe.tags || []).includes(state.tag)) && (!query || [
     recipe.title,
     recipe.description,
     recipe.sourceName,
@@ -232,6 +263,12 @@ function renderTagFilters() {
   ).join('')}`;
 }
 
+function renderListFilter() {
+  const selectedExists = state.lists.some((list) => list.id === state.listId);
+  if (!selectedExists) state.listId = '';
+  el.listFilter.innerHTML = `<option value="">All recipes</option>${state.lists.map((list) => `<option value="${esc(list.id)}" ${state.listId === list.id ? 'selected' : ''}>${esc(list.name)} (${list.recipeIds.length})</option>`).join('')}`;
+}
+
 function cardTemplate(recipe) {
   const time = minutesLabel(recipe);
   const source = recipe.sourceName || (recipe.sourceUrl ? 'From the web' : 'Friends’ recipe');
@@ -251,8 +288,9 @@ function cardTemplate(recipe) {
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
       ${makers.length ? `<div class="card-makers" aria-label="Made by ${recipe.madeCount} friends"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span>${recipe.madeCount} made it</span></div>` : ''}
     </div>
-    <div class="card-actions">
+    <div class="card-actions card-actions-three">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
+      <button data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
       <button data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You made this!' : 'I made this!'} · ${recipe.madeCount || 0}</button>
     </div>
   </article>`;
@@ -261,9 +299,11 @@ function cardTemplate(recipe) {
 function render() {
   const recipes = visibleRecipes();
   renderTagFilters();
+  renderListFilter();
   el.grid.innerHTML = recipes.map(cardTemplate).join('');
   const total = state.recipes.length;
-  el.count.textContent = total ? `${total} keeper${total === 1 ? '' : 's'} in the shared box` : 'No recipes in the box yet';
+  const activeList = state.lists.find((list) => list.id === state.listId);
+  el.count.textContent = activeList ? `${recipes.length} recipe${recipes.length === 1 ? '' : 's'} in ${activeList.name}` : (total ? `${total} keeper${total === 1 ? '' : 's'} in the shared box` : 'No recipes in the box yet');
   el.empty.hidden = recipes.length > 0;
   if (!recipes.length && (state.query || state.tag)) {
     el.empty.querySelector('h3').textContent = 'No bites found.';
@@ -272,6 +312,57 @@ function render() {
     el.empty.querySelector('h3').textContent = 'His recipe box is hungry.';
     el.empty.querySelector('p').textContent = 'Paste the first family favorite up above.';
   }
+}
+
+function listDialogTemplate(recipe) {
+  return `<div class="list-hero"><span class="social-eyebrow">Your recipe lists</span><h2>Save this keeper</h2><p>${esc(recipe.title)}</p></div>
+    <div class="list-dialog-body">
+      <div class="list-choices" aria-label="Choose lists">
+        ${state.lists.length ? state.lists.map((list) => `<label class="list-choice"><input type="checkbox" data-list-toggle="${esc(list.id)}" ${list.recipeIds.includes(recipe.id) ? 'checked' : ''}><span><strong>${esc(list.name)}</strong><small>${list.recipeIds.length} recipe${list.recipeIds.length === 1 ? '' : 's'}</small></span></label>`).join('') : '<p class="list-empty">Make your first list below—weeknight hits, party food, things involving unreasonable amounts of garlic…</p>'}
+      </div>
+      <form id="new-list-form" class="new-list-form"><label for="new-list-name">New list</label><div><input id="new-list-name" name="name" maxlength="40" required placeholder="Weeknight favorites"><button class="primary-button" type="submit">Create & save</button></div></form>
+      <button class="action-button list-done" type="button" data-list-done>Done</button>
+    </div>`;
+}
+
+function openListDialog(id) {
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
+  state.listRecipeId = id;
+  el.listContent.innerHTML = listDialogTemplate(recipe);
+  el.listDialog.showModal();
+}
+
+function refreshListDialog() {
+  if (!el.listDialog.open || !state.listRecipeId) return;
+  const recipe = state.recipes.find((item) => item.id === state.listRecipeId);
+  if (recipe) el.listContent.innerHTML = listDialogTemplate(recipe);
+}
+
+async function toggleRecipeList(listId, checked) {
+  const list = state.lists.find((item) => item.id === listId);
+  if (!list || !state.listRecipeId) return;
+  const recipeId = state.listRecipeId;
+  await api(`/lists/${encodeURIComponent(listId)}/recipes/${encodeURIComponent(recipeId)}`, { method: checked ? 'PUT' : 'DELETE' });
+  list.recipeIds = checked ? [...new Set([...list.recipeIds, recipeId])] : list.recipeIds.filter((id) => id !== recipeId);
+  render();
+  refreshDialog();
+  refreshListDialog();
+}
+
+async function createList(event) {
+  event.preventDefault();
+  const form = event.target;
+  const button = form.querySelector('button');
+  const name = new FormData(form).get('name');
+  button.disabled = true;
+  try {
+    const result = await api('/lists', { method: 'POST', body: JSON.stringify({ name }) });
+    state.lists.push(result.list);
+    await toggleRecipeList(result.list.id, true);
+    showToast(`Saved to ${result.list.name}!`);
+  } catch (error) { showToast(error.message); }
+  finally { button.disabled = false; }
 }
 
 function socialTemplate(recipe) {
@@ -339,6 +430,7 @@ function detailTemplate(recipe) {
     <div class="detail-actions">
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
       <button class="action-button" data-share="${esc(recipe.id)}">Copy recipe link</button>
+      <button class="action-button" data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to lists' : 'Save to a list'}</button>
       <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You made this!' : 'I made this!'} · ${recipe.madeCount || 0}</button>
       ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
       <button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>
@@ -369,25 +461,19 @@ function refreshDialog() {
 }
 
 function profileTemplate(profile) {
-  const avatar = { ...AVATAR_DEFAULT, ...(profile.avatar || {}) };
+  const avatar = normalizedClientAvatar(profile.avatar || {});
   const backgrounds = [
-    ['sunshine', 'Sunshine'], ['tomato', 'Tomato'], ['blueberry', 'Blueberry'], ['mint', 'Mint'],
-  ];
-  const accessories = [
-    ['none', 'Just the bulb'], ['chef', 'Chef'], ['crown', 'Royal'], ['cowboy', 'Cowboy'], ['party', 'Party'],
-  ];
-  const badges = [
-    ['spoon', 'Spoon'], ['heart', 'Heart'], ['fire', 'Spicy'], ['star', 'Star'],
+    ['sunshine', 'Sunshine', '#ffd43b'], ['tomato', 'Tomato', '#ff6975'], ['blueberry', 'Blueberry', '#72a9ff'], ['mint', 'Mint', '#9cdb88'],
   ];
   return `<div class="profile-hero">
       <div id="profile-avatar-preview" class="profile-avatar-preview">${avatarTemplate(profile, 'avatar-large')}</div>
-      <div><span class="social-eyebrow">Your tiny sous-chef</span><h2>Make him yours</h2><p>This Recipeboy follows your ratings, reviews, and cooking victories around the shared box.</p></div>
+      <div><span class="social-eyebrow">Your tiny sous-chef</span><h2>Make him yours</h2><p>Your Recipeboy follows your lists, ratings, reviews, and cooking victories around the shared box.</p></div>
     </div>
     <form id="profile-form" class="profile-form">
       <label class="profile-name">Display name<input name="displayName" maxlength="32" required value="${esc(profile.displayName || '')}"></label>
-      <fieldset><legend>Backdrop</legend><div class="avatar-options">${backgrounds.map(([value, label]) => `<label class="avatar-option color-option avatar-${value}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
-      <fieldset><legend>Top it off</legend><div class="avatar-options">${accessories.map(([value, label]) => `<label class="avatar-option"><input type="radio" name="accessory" value="${value}" ${avatar.accessory === value ? 'checked' : ''}><span class="option-emoji" aria-hidden="true">${AVATAR_ACCESSORIES[value] || '✓'}</span><strong>${label}</strong></label>`).join('')}</div></fieldset>
-      <fieldset><legend>Favorite flavor</legend><div class="avatar-options">${badges.map(([value, label]) => `<label class="avatar-option"><input type="radio" name="badge" value="${value}" ${avatar.badge === value ? 'checked' : ''}><span class="option-emoji" aria-hidden="true">${AVATAR_BADGES[value]}</span><strong>${label}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Backdrop</legend><div class="avatar-options color-options">${backgrounds.map(([value, label, color]) => `<label class="avatar-option color-option" style="--swatch:${color}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span class="color-swatch" aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Choose your Recipeboy</legend><div class="avatar-options character-options">${Object.entries(AVATAR_CHARACTERS).map(([value, option]) => `<label class="avatar-option character-option"><input type="radio" name="character" value="${value}" ${avatar.character === value ? 'checked' : ''}><span class="option-art character-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Favorite flavor</legend><div class="avatar-options flavor-options">${Object.entries(AVATAR_FLAVORS).map(([value, option]) => `<label class="avatar-option flavor-option"><input type="radio" name="flavor" value="${value}" ${avatar.flavor === value ? 'checked' : ''}><span class="option-art flavor-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
       <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button></div>
     </form>`;
 }
@@ -406,7 +492,7 @@ function openProfile() {
 
 function profileFormAvatar(form) {
   const data = new FormData(form);
-  return { background: data.get('background'), accessory: data.get('accessory'), badge: data.get('badge') };
+  return { background: data.get('background'), character: data.get('character'), flavor: data.get('flavor') };
 }
 
 function refreshProfilePreview() {
@@ -572,6 +658,8 @@ async function handleAction(event) {
     await copyRecipeLink(shareButton.dataset.share);
     return;
   }
+  const saveListButton = event.target.closest('[data-save-list]');
+  if (saveListButton) return openListDialog(saveListButton.dataset.saveList);
   const madeButton = event.target.closest('[data-made]');
   if (madeButton) return markMade(madeButton.dataset.made);
   const deleteButton = event.target.closest('[data-delete]');
@@ -599,6 +687,7 @@ el.dialog.addEventListener('close', () => {
 });
 el.search.addEventListener('input', () => { state.query = el.search.value; render(); });
 el.sort.addEventListener('change', () => { state.sort = el.sort.value; render(); });
+el.listFilter.addEventListener('change', () => { state.listId = el.listFilter.value; render(); });
 el.tagFilters.addEventListener('click', (event) => {
   const button = event.target.closest('[data-tag]');
   if (!button) return;
@@ -612,6 +701,16 @@ el.profileDialog.addEventListener('submit', (event) => { if (event.target.id ===
 el.profileDialog.addEventListener('click', (event) => {
   if (event.target.closest('#clerk-account-button')) authClient?.openAccount();
 });
+document.getElementById('list-close').addEventListener('click', () => el.listDialog.close());
+el.listDialog.addEventListener('click', (event) => {
+  if (event.target === el.listDialog || event.target.closest('[data-list-done]')) el.listDialog.close();
+});
+el.listDialog.addEventListener('change', (event) => {
+  const input = event.target.closest('[data-list-toggle]');
+  if (input) void toggleRecipeList(input.dataset.listToggle, input.checked).catch((error) => showToast(error.message));
+});
+el.listDialog.addEventListener('submit', (event) => { if (event.target.id === 'new-list-form') void createList(event); });
+el.listDialog.addEventListener('close', () => { state.listRecipeId = null; });
 
 async function saveClippedRecipe() {
   const clippedRecipe = bookmarkletPayload();
@@ -643,8 +742,9 @@ async function saveClippedRecipe() {
 
 async function loadSharedBox() {
   try {
-    const result = await api('/recipes');
-    state.recipes = result.recipes || [];
+    const [recipeResult, listResult] = await Promise.all([api('/recipes'), api('/lists')]);
+    state.recipes = recipeResult.recipes || [];
+    state.lists = listResult.lists || [];
     render();
     const linkedRecipeId = recipeIdFromHash();
     if (linkedRecipeId) openRecipe(linkedRecipeId, false);
@@ -660,6 +760,7 @@ async function loadSharedBox() {
 function showSignedOut() {
   loadedUserId = '';
   state.recipes = [];
+  state.lists = [];
   state.profile = null;
   if (el.dialog.open) el.dialog.close();
   el.appMain.hidden = true;

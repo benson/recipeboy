@@ -24,11 +24,14 @@ test('requires a signed-in account for recipe data', async () => {
 });
 
 test('normalizes avatar choices to the supported Recipeboy palette', () => {
-  assert.deepEqual(normalizeAvatar({ background: 'mint', accessory: 'chef', badge: 'fire' }), {
-    background: 'mint', accessory: 'chef', badge: 'fire',
+  assert.deepEqual(normalizeAvatar({ background: 'mint', character: 'basil', flavor: 'umami' }), {
+    background: 'mint', character: 'basil', flavor: 'umami',
   });
   assert.deepEqual(normalizeAvatar({ background: '<script>', accessory: 'wings', badge: 'x' }), {
-    background: 'sunshine', accessory: 'none', badge: 'spoon',
+    background: 'sunshine', character: 'classic', flavor: 'savory',
+  });
+  assert.deepEqual(normalizeAvatar({ background: 'tomato', accessory: 'chef', badge: 'fire' }), {
+    background: 'tomato', character: 'chef', flavor: 'spicy',
   });
 });
 

@@ -127,15 +127,17 @@ function cleanText(value, limit = 5000) {
 }
 
 const AVATAR_BACKGROUNDS = new Set(['sunshine', 'tomato', 'blueberry', 'mint']);
-const AVATAR_ACCESSORIES = new Set(['none', 'chef', 'crown', 'cowboy', 'party']);
-const AVATAR_BADGES = new Set(['spoon', 'heart', 'fire', 'star']);
+const AVATAR_CHARACTERS = new Set(['classic', 'chef', 'shallot', 'ginger', 'scallion', 'chili', 'carrot', 'basil', 'lemon', 'tomato']);
+const AVATAR_FLAVORS = new Set(['savory', 'spicy', 'umami', 'minty', 'sweet', 'smoky']);
 
 function normalizeAvatar(value = {}) {
   const avatar = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const legacyCharacter = { chef: 'chef' };
+  const legacyFlavor = { fire: 'spicy', heart: 'sweet', star: 'umami', spoon: 'savory' };
   return {
     background: AVATAR_BACKGROUNDS.has(avatar.background) ? avatar.background : 'sunshine',
-    accessory: AVATAR_ACCESSORIES.has(avatar.accessory) ? avatar.accessory : 'none',
-    badge: AVATAR_BADGES.has(avatar.badge) ? avatar.badge : 'spoon',
+    character: AVATAR_CHARACTERS.has(avatar.character) ? avatar.character : (legacyCharacter[avatar.accessory] || 'classic'),
+    flavor: AVATAR_FLAVORS.has(avatar.flavor) ? avatar.flavor : (legacyFlavor[avatar.badge] || 'savory'),
   };
 }
 
@@ -1028,6 +1030,70 @@ async function restoreRecipe(id, env) {
   return json({ recipe: rowToRecipe(row) });
 }
 
+async function listRecipeLists(env, userId) {
+  const [{ results: listRows }, { results: itemRows }] = await Promise.all([
+    env.DB.prepare('SELECT id, name, created_at, updated_at FROM recipe_lists WHERE user_id = ? ORDER BY updated_at DESC, name ASC').bind(userId).all(),
+    env.DB.prepare(`
+      SELECT i.list_id, i.recipe_id
+      FROM recipe_list_items i
+      JOIN recipe_lists l ON l.id = i.list_id
+      JOIN recipes r ON r.id = i.recipe_id AND r.deleted_at IS NULL
+      WHERE l.user_id = ?
+      ORDER BY i.created_at DESC
+    `).bind(userId).all(),
+  ]);
+  const recipeIdsByList = new Map((listRows || []).map((row) => [row.id, []]));
+  for (const row of itemRows || []) recipeIdsByList.get(row.list_id)?.push(row.recipe_id);
+  return (listRows || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    recipeIds: recipeIdsByList.get(row.id) || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+async function createRecipeList(request, env, userId) {
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  const name = cleanText(body.name, 40);
+  if (!name) return json({ error: 'Give this list a name first.' }, 400);
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_lists WHERE user_id = ?').bind(userId).first();
+  if (Number(count?.count || 0) >= 50) return json({ error: 'Fifty lists ought to hold even the hungriest plans.' }, 400);
+  const duplicate = await env.DB.prepare('SELECT id FROM recipe_lists WHERE user_id = ? AND lower(name) = lower(?)').bind(userId, name).first();
+  if (duplicate) return json({ error: 'You already have a list with that name.' }, 409);
+  const id = crypto.randomUUID().slice(0, 12);
+  const now = new Date().toISOString();
+  await env.DB.prepare('INSERT INTO recipe_lists (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').bind(id, userId, name, now, now).run();
+  return json({ list: { id, name, recipeIds: [], createdAt: now, updatedAt: now } }, 201);
+}
+
+async function updateRecipeListItem(listId, recipeId, add, env, userId) {
+  const list = await env.DB.prepare('SELECT id FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId).first();
+  if (!list) return json({ error: 'List not found.' }, 404);
+  const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(recipeId).first();
+  if (!recipe) return json({ error: 'Recipe not found.' }, 404);
+  const now = new Date().toISOString();
+  if (add) {
+    await env.DB.prepare('INSERT OR IGNORE INTO recipe_list_items (list_id, recipe_id, created_at) VALUES (?, ?, ?)').bind(listId, recipeId, now).run();
+  } else {
+    await env.DB.prepare('DELETE FROM recipe_list_items WHERE list_id = ? AND recipe_id = ?').bind(listId, recipeId).run();
+  }
+  await env.DB.prepare('UPDATE recipe_lists SET updated_at = ? WHERE id = ? AND user_id = ?').bind(now, listId, userId).run();
+  return json({ listId, recipeId, saved: add });
+}
+
+async function deleteRecipeList(listId, env, userId) {
+  const list = await env.DB.prepare('SELECT id FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId).first();
+  if (!list) return json({ error: 'List not found.' }, 404);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM recipe_list_items WHERE list_id = ?').bind(listId),
+    env.DB.prepare('DELETE FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId),
+  ]);
+  return json({ id: listId, deleted: true });
+}
+
 async function rateLimit(request, limiter, message) {
   if (!limiter?.limit) return null;
   const key = request.headers.get('cf-connecting-ip') || 'local';
@@ -1055,6 +1121,21 @@ export default {
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
         return limited || createRecipe(request, env, auth.userId);
+      }
+      if (request.method === 'GET' && path === '/lists') return json({ lists: await listRecipeLists(env, auth.userId) });
+      if (request.method === 'POST' && path === '/lists') {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before making more lists.');
+        return limited || createRecipeList(request, env, auth.userId);
+      }
+      const listItemMatch = path.match(/^\/lists\/([a-zA-Z0-9-]+)\/recipes\/([a-zA-Z0-9-]+)$/);
+      if ((request.method === 'PUT' || request.method === 'DELETE') && listItemMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more lists.');
+        return limited || updateRecipeListItem(listItemMatch[1], listItemMatch[2], request.method === 'PUT', env, auth.userId);
+      }
+      const listMatch = path.match(/^\/lists\/([a-zA-Z0-9-]+)$/);
+      if (request.method === 'DELETE' && listMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more lists.');
+        return limited || deleteRecipeList(listMatch[1], env, auth.userId);
       }
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
       if (request.method === 'POST' && madeMatch) {
