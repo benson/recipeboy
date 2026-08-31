@@ -46,6 +46,13 @@ button { color: inherit; }
   border-bottom: 6px solid var(--navy);
 }
 
+.auth-controls { position: absolute; top: 14px; right: max(18px, calc((100vw - 1120px) / 2)); z-index: 6; display: flex; align-items: center; gap: 8px; }
+.account-button, .sign-out-button { min-height: 42px; border: 3px solid var(--navy); font-weight: 900; cursor: pointer; }
+.account-button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; color: var(--navy); background: var(--white); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); }
+.account-initial { display: grid; place-items: center; width: 28px; height: 28px; color: var(--white); background: var(--blue); border: 2px solid var(--navy); border-radius: 50%; }
+.sign-out-button { padding: 7px 11px; color: var(--white); background: var(--red); border-radius: 999px; }
+.account-button:hover, .sign-out-button:hover { transform: translateY(-1px); }
+
 .hero::after {
   content: "";
   position: absolute;
@@ -78,6 +85,13 @@ h1 span { color: var(--red); display: block; margin-left: 48px; }
 .burst-two { left: 14px; bottom: 4px; background: var(--red); transform: rotate(-12deg); }
 
 main { width: min(1120px, calc(100% - 36px)); margin: 20px auto 72px; }
+
+.auth-gate { display: flex; align-items: center; gap: 24px; width: min(700px, calc(100% - 36px)); margin: 28px auto 82px; padding: 22px 28px 22px 20px; background: var(--white); border: 6px solid var(--navy); border-radius: 24px 24px 36px 24px; box-shadow: var(--shadow); }
+.auth-gate img { width: 150px; flex: none; filter: drop-shadow(5px 6px 0 rgba(16,42,90,.15)); }
+.auth-gate h2 { margin: 3px 0 8px; font-size: clamp(25px, 4vw, 38px); line-height: 1.05; }
+.auth-gate p { margin: 0 0 16px; color: #596885; }
+.auth-eyebrow { color: var(--red); font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.auth-gate .primary-button { width: auto; }
 
 .feeder {
   background: var(--white);
@@ -195,6 +209,7 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .card-actions button { min-height: 52px; border: 0; background: var(--yellow); font-weight: 900; cursor: pointer; }
 .card-actions button + button { border-left: 4px solid var(--navy); background: var(--red); color: var(--white); }
 .card-actions button:hover { filter: brightness(.96); }
+.card-actions button:disabled { color: var(--navy); background: #bce3ac; cursor: default; filter: none; }
 
 .empty-state { display: flex; align-items: center; justify-content: center; gap: 25px; padding: 38px; background: var(--white); border: 5px dashed var(--navy); border-radius: 20px; }
 .empty-state img { width: 135px; height: 135px; }
@@ -213,6 +228,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .detail-actions { display: flex; flex-wrap: wrap; gap: 12px; padding: 22px 30px 0; }
 .action-button { padding: 10px 16px; background: var(--white); }
 .action-button.made { color: var(--white); background: var(--red); }
+.action-button.made:disabled { color: var(--navy); background: #bce3ac; box-shadow: none; cursor: default; transform: none; }
 .action-button.delete { margin-left: auto; color: #8c2630; background: transparent; border-color: #8c2630; box-shadow: none; }
 .action-button.delete:hover { box-shadow: 4px 4px 0 #8c2630; }
 .action-button.delete.confirm { color: var(--white); background: #8c2630; }
@@ -246,6 +262,13 @@ footer { height: 12px; background: var(--navy); }
 
 @media (max-width: 590px) {
   .bookmarklet-dock { display: none; }
+  .auth-controls { top: 10px; right: 9px; gap: 5px; }
+  .account-button { min-height: 38px; padding-right: 6px; }
+  .account-button #account-label { display: none; }
+  .sign-out-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
+  .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
+  .auth-gate img { width: 120px; }
+  .auth-gate .primary-button { width: 100%; }
   .hero { min-height: 235px; align-items: flex-start; justify-content: flex-start; padding-top: 28px; }
   .mascot-stage { position: absolute; right: -10px; bottom: 3px; width: 172px; }
   h1 { font-size: 51px; }

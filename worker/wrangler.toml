@@ -2,6 +2,10 @@ name = "recipeboy-api"
 main = "worker.js"
 compatibility_date = "2026-08-31"
 
+[vars]
+CLERK_ISSUER = "https://clerk.bensonperry.com"
+CLERK_AUTHORIZED_PARTIES = "https://bensonperry.com,http://127.0.0.1:4173,http://localhost:4173"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "recipeboy-db"

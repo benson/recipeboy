@@ -1,5 +1,7 @@
+import { initAuth } from './auth.js?v=1';
+
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
-  ? 'http://127.0.0.1:8787'
+  ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
 const state = { recipes: [], query: '', tag: '', sort: 'newest', activeId: null, confirmDeleteId: null };
@@ -19,7 +21,19 @@ const el = {
   bookmarkletDock: document.getElementById('bookmarklet-dock'),
   bookmarkletDismiss: document.getElementById('bookmarklet-dismiss'),
   bookmarklet: document.getElementById('recipeboy-bookmarklet'),
+  appMain: document.getElementById('app-main'),
+  authGate: document.getElementById('auth-gate'),
+  authMessage: document.getElementById('auth-message'),
+  authControls: document.getElementById('auth-controls'),
+  signIn: document.getElementById('sign-in-button'),
+  signOut: document.getElementById('sign-out-button'),
+  account: document.getElementById('account-button'),
+  accountInitial: document.getElementById('account-initial'),
+  accountLabel: document.getElementById('account-label'),
 };
+
+let authClient = null;
+let loadedUserId = '';
 
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -33,10 +47,21 @@ function safeUrl(value) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(API + path, {
+  const request = async (token) => fetch(API + path, {
     ...options,
-    headers: options.body ? { 'Content-Type': 'application/json', ...(options.headers || {}) } : options.headers,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
   });
+  let token = await authClient?.getToken();
+  if (!token) throw new Error('Sign in to use the shared recipe box.');
+  let response = await request(token);
+  if (response.status === 401) {
+    token = await authClient?.getToken({ skipCache: true });
+    if (token) response = await request(token);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data.error || 'Something went sideways.');
@@ -67,9 +92,11 @@ async function normalizeInput(input, button, extra = {}) {
 const bookmarkletSource = `(()=>{const tidy=s=>String(s||'').replace(/\\n{3,}/g,'\\n\\n').trim();const title=tidy(document.title.replace(/\\s*[-|:]\\s*Reddit.*$/i,''));const selected=tidy(String(getSelection()));const nodes=[...document.querySelectorAll('shreddit-post,[data-testid="post-container"],article,.usertext-body,.entry')];const score=e=>{const t=tidy(e.innerText);return (/ingredients?|directions?|instructions?|method/i.test(t)?100000:0)+Math.min(t.length,50000)};nodes.sort((a,b)=>score(b)-score(a));const pageText=selected||tidy(nodes[0]?.innerText)||tidy(document.querySelector('main')?.innerText)||tidy(document.body.innerText);if(pageText.length<40){alert('Recipeboy could not find enough recipe text on this page. Select the recipe text and try again.');return}const payload=encodeURIComponent(JSON.stringify({text:(title+'\\n'+pageText).slice(0,48000),sourceUrl:location.href,sourceTitle:title}));open('https://bensonperry.com/recipeboy/#clip='+payload,'_blank','noopener')})()`;
 const BOOKMARKLET_DISMISSED_KEY = 'recipeboy-bookmarklet-dismissed';
 
-try {
-  el.bookmarkletDock.hidden = localStorage.getItem(BOOKMARKLET_DISMISSED_KEY) === '1';
-} catch {}
+el.bookmarkletDock.hidden = true;
+
+function bookmarkletWasDismissed() {
+  try { return localStorage.getItem(BOOKMARKLET_DISMISSED_KEY) === '1'; } catch { return false; }
+}
 
 el.bookmarklet.setAttribute('href', `javascript:${bookmarkletSource}`);
 el.bookmarklet.addEventListener('click', (event) => {
@@ -110,10 +137,25 @@ function shoppingList(recipe) {
   return recipe.ingredients.map((ingredient) => `☐ ${ingredientText(ingredient)}`).join('\n');
 }
 
+function recipePermalink(id) {
+  return `${location.origin}${location.pathname}#recipe=${encodeURIComponent(id)}`;
+}
+
+function recipeIdFromHash() {
+  if (!location.hash.startsWith('#recipe=')) return '';
+  const id = location.hash.slice('#recipe='.length);
+  return /^[a-zA-Z0-9-]+$/.test(id) ? id : '';
+}
+
 async function copyShoppingList(recipe) {
   const text = `${recipe.title}\n${shoppingList(recipe)}`;
   await navigator.clipboard.writeText(text);
   showToast('Shopping list copied!');
+}
+
+async function copyRecipeLink(id) {
+  await navigator.clipboard.writeText(recipePermalink(id));
+  showToast('Recipe link copied!');
 }
 
 let toastTimer;
@@ -183,7 +225,7 @@ function cardTemplate(recipe) {
     </div>
     <div class="card-actions">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
-      <button data-made="${esc(recipe.id)}">I made this! · ${recipe.madeCount || 0}</button>
+      <button data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You made this!' : 'I made this!'} · ${recipe.madeCount || 0}</button>
     </div>
   </article>`;
 }
@@ -224,7 +266,8 @@ function detailTemplate(recipe) {
     </div>
     <div class="detail-actions">
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
-      <button class="action-button made" data-made="${esc(recipe.id)}">I made this! · ${recipe.madeCount || 0}</button>
+      <button class="action-button" data-share="${esc(recipe.id)}">Copy recipe link</button>
+      <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You made this!' : 'I made this!'} · ${recipe.madeCount || 0}</button>
       ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
       <button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>
     </div>
@@ -234,13 +277,16 @@ function detailTemplate(recipe) {
     </div>`;
 }
 
-function openRecipe(id) {
+function openRecipe(id, updateHash = true) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   state.activeId = id;
   state.confirmDeleteId = null;
   el.dialogContent.innerHTML = detailTemplate(recipe);
   el.dialog.showModal();
+  if (updateHash && location.hash !== `#recipe=${encodeURIComponent(id)}`) {
+    history.pushState(null, '', `#recipe=${encodeURIComponent(id)}`);
+  }
 }
 
 function refreshDialog() {
@@ -255,9 +301,10 @@ async function markMade(id) {
   try {
     const result = await api(`/recipes/${encodeURIComponent(id)}/made`, { method: 'POST' });
     recipe.madeCount = result.madeCount;
+    recipe.madeByViewer = true;
     render();
     refreshDialog();
-    showToast(result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`);
+    showToast(result.alreadyMade ? 'Recipeboy already counted you!' : (result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`));
   } catch (error) { showToast(error.message); }
 }
 
@@ -327,6 +374,11 @@ async function handleAction(event) {
     if (recipe) await copyShoppingList(recipe);
     return;
   }
+  const shareButton = event.target.closest('[data-share]');
+  if (shareButton) {
+    await copyRecipeLink(shareButton.dataset.share);
+    return;
+  }
   const madeButton = event.target.closest('[data-made]');
   if (madeButton) return markMade(madeButton.dataset.made);
   const deleteButton = event.target.closest('[data-delete]');
@@ -349,6 +401,7 @@ el.dialog.addEventListener('click', (event) => { if (event.target === el.dialog)
 el.dialog.addEventListener('close', () => {
   state.activeId = null;
   state.confirmDeleteId = null;
+  if (location.hash.startsWith('#recipe=')) history.replaceState(null, '', `${location.pathname}${location.search}`);
 });
 el.search.addEventListener('input', () => { state.query = el.search.value; render(); });
 el.sort.addEventListener('change', () => { state.sort = el.sort.value; render(); });
@@ -359,19 +412,9 @@ el.tagFilters.addEventListener('click', (event) => {
   render();
 });
 
-try {
-  const result = await api('/recipes');
-  state.recipes = result.recipes || [];
-  render();
-} catch (error) {
-  el.count.textContent = 'Couldn’t reach the shared box';
-  el.empty.hidden = false;
-  el.empty.querySelector('h3').textContent = 'Recipeboy is taking a snack break.';
-  el.empty.querySelector('p').textContent = 'Try refreshing in a moment.';
-}
-
-const clippedRecipe = bookmarkletPayload();
-if (clippedRecipe?.text) {
+async function saveClippedRecipe() {
+  const clippedRecipe = bookmarkletPayload();
+  if (!clippedRecipe?.text) return;
   const button = el.form.querySelector('button[type="submit"]');
   button.disabled = true;
   button.querySelector('span').textContent = 'Saving from your browser…';
@@ -395,4 +438,72 @@ if (clippedRecipe?.text) {
     button.disabled = false;
     button.querySelector('span').textContent = 'Normalize it!';
   }
+}
+
+async function loadSharedBox() {
+  try {
+    const result = await api('/recipes');
+    state.recipes = result.recipes || [];
+    render();
+    const linkedRecipeId = recipeIdFromHash();
+    if (linkedRecipeId) openRecipe(linkedRecipeId, false);
+    await saveClippedRecipe();
+  } catch (error) {
+    el.count.textContent = error.message || 'Couldn’t reach the shared box';
+    el.empty.hidden = false;
+    el.empty.querySelector('h3').textContent = 'Recipeboy is taking a snack break.';
+    el.empty.querySelector('p').textContent = 'Try refreshing or signing in again.';
+  }
+}
+
+function showSignedOut() {
+  loadedUserId = '';
+  state.recipes = [];
+  if (el.dialog.open) el.dialog.close();
+  el.appMain.hidden = true;
+  el.authControls.hidden = true;
+  el.bookmarkletDock.hidden = true;
+  el.authGate.hidden = false;
+  el.authMessage.textContent = 'Sign in to see and add recipes with your friends.';
+  el.signIn.hidden = false;
+}
+
+async function showSignedIn(user) {
+  el.authGate.hidden = true;
+  el.appMain.hidden = false;
+  el.authControls.hidden = false;
+  el.accountInitial.textContent = user.initials;
+  el.accountLabel.textContent = user.label;
+  el.account.title = user.email ? `Manage ${user.email}` : 'Manage account';
+  el.bookmarkletDock.hidden = bookmarkletWasDismissed();
+  if (loadedUserId === user.id) return;
+  loadedUserId = user.id;
+  state.recipes = [];
+  el.count.textContent = 'Opening the shared box…';
+  await loadSharedBox();
+}
+
+async function handleAuthChange(user) {
+  if (user) await showSignedIn(user);
+  else showSignedOut();
+}
+
+el.signIn.addEventListener('click', () => authClient?.signIn());
+el.signOut.addEventListener('click', () => authClient?.signOut());
+el.account.addEventListener('click', () => authClient?.openAccount());
+window.addEventListener('hashchange', () => {
+  const linkedRecipeId = recipeIdFromHash();
+  if (linkedRecipeId) {
+    openRecipe(linkedRecipeId, false);
+  } else if (el.dialog.open) {
+    el.dialog.close();
+  }
+});
+
+try {
+  authClient = await initAuth({ onChange: (user) => { void handleAuthChange(user); } });
+  await handleAuthChange(authClient.user);
+} catch (error) {
+  el.authMessage.textContent = `${error.message} Refresh the page to try again.`;
+  el.signIn.hidden = true;
 }

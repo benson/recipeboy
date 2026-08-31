@@ -1,8 +1,8 @@
 # Recipeboy
 
-A tiny, no-login recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, and a shared “I made this” count.
+A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, and a per-person “I made this” count.
 
-The public API is intentionally anonymous, but mutation endpoints are rate-limited for ordinary human use, oversized requests and recipe pages are rejected, redirects are revalidated before fetching, and deleted recipes are soft-deleted so the UI can offer Undo. All recipe content is escaped before browser rendering and is never executed as code.
+The recipe box is shared by signed-in friends. Clerk handles browser sign-in and the Worker verifies every session JWT before allowing recipe reads or writes. Mutation endpoints are also rate-limited, oversized requests and recipe pages are rejected, redirects are revalidated before fetching, and deleted recipes are soft-deleted so the UI can offer Undo. All recipe content is escaped before browser rendering and is never executed as code.
 
 The static frontend is hosted by GitHub Pages at [bensonperry.com/recipeboy](https://bensonperry.com/recipeboy/). A small Cloudflare Worker uses D1 for shared storage and extracts schema.org Recipe data from pasted links.
 
@@ -39,6 +39,8 @@ npm run dev
 
 Run `npm run dev:api` separately for the Worker. The production frontend points to the deployed Worker.
 
+Local browser testing can use `?auth=dev` with the Worker started using `--var RECIPEBOY_AUTH_DISABLED:1`. That bypass is accepted only by the local Worker process; production defaults to rejecting requests unless a Clerk JWT verifies successfully.
+
 The mascot source was generated with ImageGen and deterministically quantized and traced to a five-color SVG:
 
 ```sh
@@ -54,3 +56,5 @@ npm run deploy:api
 ```
 
 Existing databases should apply each file in `worker/migrations` once before deploying the corresponding Worker version.
+
+Recipeboy reuses the production Clerk instance and publishable key used by Biblioplex. The Worker needs Clerk's PEM public verification key as `CLERK_JWT_KEY`; it is public key material but is stored as a Worker secret so configuration stays consistent with Biblioplex. `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` live in `worker/wrangler.toml`.

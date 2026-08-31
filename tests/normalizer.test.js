@@ -1,6 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl } from '../worker/worker.js';
+import { generateKeyPairSync, sign as signBytes } from 'node:crypto';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
+
+function signedClerkToken(privateKey, overrides = {}) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
+    sub: 'user_friend',
+    iss: 'https://clerk.bensonperry.com',
+    azp: 'https://bensonperry.com',
+    nbf: now - 5,
+    exp: now + 60,
+    ...overrides,
+  })}`;
+  return `${unsigned}.${signBytes('RSA-SHA256', Buffer.from(unsigned), privateKey).toString('base64url')}`;
+}
+
+test('requires a signed-in account for recipe data', async () => {
+  const response = await worker.fetch(new Request('https://recipeboy.test/recipes'), {});
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /sign in/i);
+});
+
+test('verifies Clerk JWT signatures, issuer, and authorized frontend', async () => {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const env = {
+    CLERK_JWT_KEY: publicKey.export({ type: 'spki', format: 'pem' }),
+    CLERK_ISSUER: 'https://clerk.bensonperry.com',
+    CLERK_AUTHORIZED_PARTIES: 'https://bensonperry.com',
+  };
+  const request = new Request('https://recipeboy.test/recipes');
+  const auth = await verifyClerkJwt(signedClerkToken(privateKey), env, request);
+  assert.equal(auth.userId, 'user_friend');
+  await assert.rejects(
+    () => verifyClerkJwt(signedClerkToken(privateKey, { azp: 'https://attacker.example' }), env, request),
+    /origin is not allowed/,
+  );
+});
+
+test('CORS preflight allows bearer authorization', async () => {
+  const response = await worker.fetch(new Request('https://recipeboy.test/recipes', { method: 'OPTIONS' }), {});
+  assert.equal(response.status, 204);
+  assert.match(response.headers.get('access-control-allow-headers'), /Authorization/);
+});
 
 test('allows public recipe URLs and rejects local network targets', () => {
   assert.equal(validatePublicUrl('https://example.com/recipe#ingredients').href, 'https://example.com/recipe');
@@ -27,7 +70,7 @@ test('rejects oversized API request bodies before normalization', async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ input: 'x'.repeat(260_000) }),
   });
-  const response = await worker.fetch(request, {});
+  const response = await worker.fetch(request, { RECIPEBOY_AUTH_DISABLED: '1' });
   assert.equal(response.status, 413);
   assert.match((await response.json()).error, /too large/i);
 });

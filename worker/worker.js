@@ -9,11 +9,80 @@ function cors() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
   };
+}
+
+function b64urlToBytes(input) {
+  const normalized = String(input || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function b64urlToJson(input) {
+  return JSON.parse(new TextDecoder().decode(b64urlToBytes(input)));
+}
+
+function configList(value) {
+  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function pemToArrayBuffer(pem) {
+  const base64 = String(pem || '')
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/\s+/g, '');
+  return b64urlToBytes(base64.replace(/\+/g, '-').replace(/\//g, '_')).buffer;
+}
+
+async function verifyClerkJwt(token, env, request) {
+  if (env.RECIPEBOY_AUTH_DISABLED === '1') {
+    return { userId: request.headers.get('X-Debug-User') || 'dev_user' };
+  }
+  if (!env.CLERK_JWT_KEY) throw new Error('auth is not configured');
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3) throw new Error('invalid token');
+  const header = b64urlToJson(parts[0]);
+  const payload = b64urlToJson(parts[1]);
+  if (header.alg !== 'RS256') throw new Error('unsupported token algorithm');
+
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(payload.exp) || payload.exp < now - 5) throw new Error('token expired');
+  if (payload.nbf && payload.nbf > now + 5) throw new Error('token not active');
+  if (payload.sts === 'pending') throw new Error('account setup is incomplete');
+
+  const allowedIssuers = configList(env.CLERK_ISSUER);
+  if (allowedIssuers.length && !allowedIssuers.includes(String(payload.iss || ''))) {
+    throw new Error('token issuer is not allowed');
+  }
+  const allowedParties = configList(env.CLERK_AUTHORIZED_PARTIES);
+  if (allowedParties.length && (!payload.azp || !allowedParties.includes(String(payload.azp)))) {
+    throw new Error('token origin is not allowed');
+  }
+
+  const key = await crypto.subtle.importKey(
+    'spki',
+    pemToArrayBuffer(env.CLERK_JWT_KEY),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlToBytes(parts[2]), signed);
+  if (!valid) throw new Error('invalid token signature');
+  if (!payload.sub) throw new Error('token missing subject');
+  return { userId: String(payload.sub), claims: payload };
+}
+
+async function authenticate(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token && env.RECIPEBOY_AUTH_DISABLED !== '1') throw new Error('missing token');
+  return verifyClerkJwt(token, env, request);
 }
 
 function json(data, status = 200) {
@@ -721,15 +790,28 @@ async function recipeFromUrl(input, env, depth = 0) {
 
 function rowToRecipe(row) {
   const recipe = withDerivedTags(JSON.parse(row.data_json));
-  return { id: row.id, ...recipe, madeCount: row.made_count, createdAt: row.created_at };
+  return {
+    id: row.id,
+    ...recipe,
+    madeCount: row.made_count,
+    madeByViewer: Boolean(row.made_by_viewer),
+    createdAt: row.created_at,
+  };
 }
 
-async function listRecipes(env) {
-  const { results } = await env.DB.prepare('SELECT id, data_json, made_count, created_at FROM recipes WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500').all();
+async function listRecipes(env, userId) {
+  const { results } = await env.DB.prepare(`
+    SELECT r.id, r.data_json, r.made_count, r.created_at,
+      EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer
+    FROM recipes r
+    WHERE r.deleted_at IS NULL
+    ORDER BY r.created_at DESC
+    LIMIT 500
+  `).bind(userId).all();
   return results.map(rowToRecipe);
 }
 
-async function createRecipe(request, env) {
+async function createRecipe(request, env, userId) {
   let body;
   try { body = await readJsonRequest(request); }
   catch (error) { return json({ error: error.message }, error.status || 400); }
@@ -768,15 +850,20 @@ async function createRecipe(request, env) {
   }
   const id = crypto.randomUUID().slice(0, 12);
   const createdAt = new Date().toISOString();
-  await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)')
-    .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt).run();
-  return json({ recipe: { id, ...recipe, madeCount: 0, createdAt } }, 201);
+  await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+    .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt, userId).run();
+  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, createdAt } }, 201);
 }
 
-async function markMade(id, env) {
+async function markMade(id, env, userId) {
+  const recipe = await env.DB.prepare('SELECT made_count FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+  if (!recipe) return json({ error: 'Recipe not found.' }, 404);
+  const inserted = await env.DB.prepare('INSERT OR IGNORE INTO recipe_makes (recipe_id, user_id, created_at) VALUES (?, ?, ?)')
+    .bind(id, userId, new Date().toISOString()).run();
+  const alreadyMade = Number(inserted.meta?.changes || 0) === 0;
+  if (alreadyMade) return json({ id, madeCount: recipe.made_count, madeByViewer: true, alreadyMade: true });
   const row = await env.DB.prepare('UPDATE recipes SET made_count = made_count + 1 WHERE id = ? RETURNING made_count').bind(id).first();
-  if (!row) return json({ error: 'Recipe not found.' }, 404);
-  return json({ id, madeCount: row.made_count });
+  return json({ id, madeCount: row?.made_count ?? recipe.made_count + 1, madeByViewer: true, alreadyMade: false });
 }
 
 async function deleteRecipe(id, env) {
@@ -806,15 +893,18 @@ export default {
     const path = url.pathname.replace(/\/+$/, '') || '/';
     try {
       if (request.method === 'GET' && path === '/') return json({ ok: true, service: 'recipeboy-api' });
-      if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env) });
+      let auth;
+      try { auth = await authenticate(request, env); }
+      catch { return json({ error: 'Sign in to use the shared recipe box.' }, 401); }
+      if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env, auth.userId) });
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
-        return limited || createRecipe(request, env);
+        return limited || createRecipe(request, env, auth.userId);
       }
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
       if (request.method === 'POST' && madeMatch) {
         const limited = await rateLimit(request, env.MADE_RATE_LIMITER, 'Recipeboy believes you. Give the button a minute.');
-        return limited || markMade(madeMatch[1], env);
+        return limited || markMade(madeMatch[1], env, auth.userId);
       }
       const restoreMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/restore$/);
       if (request.method === 'POST' && restoreMatch) {
@@ -834,4 +924,4 @@ export default {
   },
 };
 
-export { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl };
+export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt };
