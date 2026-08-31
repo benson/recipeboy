@@ -215,9 +215,9 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .card-actions button + button { border-left: 4px solid var(--navy); background: var(--red); color: var(--white); }
 .card-actions button:hover { filter: brightness(.96); }
 .card-actions button:disabled { color: var(--navy); background: #bce3ac; cursor: default; filter: none; }
-.card-actions-three { grid-template-columns: .85fr .7fr 1.15fr; }
+.card-actions-three { grid-template-columns: .8fr .65fr 1.25fr; }
 .card-actions-three button:nth-child(2) { color: var(--white); background: var(--blue); }
-.card-actions-three button:nth-child(3) { color: var(--white); background: var(--red); }
+.card-actions-three button:nth-child(3) { color: var(--white); background: var(--red); font-size: 13px; white-space: nowrap; }
 
 .empty-state { display: flex; align-items: center; justify-content: center; gap: 25px; padding: 38px; background: var(--white); border: 5px dashed var(--navy); border-radius: 20px; }
 .empty-state img { width: 135px; height: 135px; }
