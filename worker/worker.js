@@ -1,5 +1,6 @@
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
+let redditTokenCache = null;
 
 function cors() {
   return {
@@ -251,12 +252,12 @@ function metadataValue(markdown, labelPattern) {
 
 function parseReaderMarkdown(markdown, sourceUrl = '', suppliedTitle = '') {
   const ingredientsSection = markdownSection(markdown, 'ingredients?|what you(?:’|\'|’)ll need');
-  const directionsSection = markdownSection(markdown, 'directions?|instructions?|method|steps?');
+  const directionsSection = markdownSection(markdown, 'directions?|instructions?|preparation|method|steps?');
   if (!ingredientsSection || !directionsSection) throw new Error('The fallback reader could not find ingredients and directions.');
 
   const ingredients = [...ingredientsSection.matchAll(/^\s*[*+-]\s+(.+)$/gm)]
-    .map((match) => cleanMarkdown(match[1]))
-    .filter(Boolean);
+    .map((match) => cleanMarkdown(match[1]).replace(/^\[[ x]\]\s*/i, ''))
+    .filter((item) => item && !/^(?:deselect all|cook mode|add to shopping list|ingredient substitutions?)\b/i.test(item));
 
   const instructions = [];
   const numbered = directionsSection.split(/\n(?=\s*\d+[.)]\s+)/);
@@ -300,8 +301,126 @@ function validatePublicUrl(input) {
   return url;
 }
 
-async function recipeFromUrl(input) {
+function findLinkedRecipeUrl(content, sourceUrl) {
+  const source = validatePublicUrl(sourceUrl);
+  const candidates = String(content || '').match(/(?:https?:\/\/[^\s)'"<>]+|(?:href=["'])?\/recipes\/[^\s)'"<>]+)/gi) || [];
+  for (const candidate of candidates) {
+    const cleaned = decodeHtml(candidate.replace(/^href=["']/i, '')).replace(/[.,;:!?]+$/, '');
+    try {
+      const linked = new URL(cleaned, source);
+      if (linked.hostname === source.hostname && /^\/recipes\//i.test(linked.pathname) && linked.href !== source.href) return linked.href;
+    } catch { /* keep looking */ }
+  }
+  return '';
+}
+
+function canFollowLinkedRecipe(sourceUrl) {
+  try { return /^\/(?:article|articles|story|stories)\//i.test(new URL(sourceUrl).pathname); } catch { return false; }
+}
+
+function redditPostId(url) {
+  const host = url.hostname.toLowerCase();
+  if (host === 'redd.it') return url.pathname.match(/^\/([a-z0-9]+)(?:\/|$)/i)?.[1] || '';
+  if (host !== 'reddit.com' && !host.endsWith('.reddit.com')) return '';
+  return url.pathname.match(/\/comments\/([a-z0-9]+)(?:\/|$)/i)?.[1] || '';
+}
+
+function redditMarkdownToPlaintext(markdown) {
+  return decodeHtml(String(markdown || ''))
+    .replace(/\r/g, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/\*\*|__|~~|`/g, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function redditComments(children, collected = []) {
+  for (const child of children || []) {
+    const data = child?.data;
+    if (!data || child.kind !== 't1') continue;
+    if (data.body) collected.push(String(data.body));
+    const replies = data.replies?.data?.children;
+    if (Array.isArray(replies)) redditComments(replies, collected);
+  }
+  return collected;
+}
+
+function recipeFromRedditPayload(payload, requestedUrl) {
+  const post = payload?.[0]?.data?.children?.[0]?.data;
+  if (!post) throw new Error('Reddit returned an empty post.');
+
+  const comments = redditComments(payload?.[1]?.data?.children)
+    .filter((comment) => /\b(?:ingredients?|directions?|instructions?|method)\b/i.test(comment))
+    .sort((left, right) => right.length - left.length);
+  const candidates = [post.selftext, ...comments].filter(Boolean);
+  let parsed;
+  for (const candidate of candidates) {
+    try {
+      parsed = parsePlaintext(`${post.title || 'Reddit recipe'}\n${redditMarkdownToPlaintext(candidate)}`);
+      if (parsed.ingredients.length && parsed.instructions.length) break;
+      parsed = null;
+    } catch { /* try a recipe-looking comment */ }
+  }
+  if (!parsed) throw new Error('Reddit loaded the post, but Recipeboy could not find both ingredients and instructions in it. Try pasting the recipe text instead.');
+
+  const canonicalUrl = post.permalink ? `https://www.reddit.com${post.permalink}` : requestedUrl;
+  const previewUrl = decodeHtml(post.preview?.images?.[0]?.source?.url || (/^https?:/i.test(post.thumbnail || '') ? post.thumbnail : ''));
+  return withDerivedTags({
+    ...parsed,
+    title: cleanText(post.title || parsed.title, 160),
+    sourceUrl: canonicalUrl,
+    sourceName: 'reddit.com',
+    imageUrl: cleanText(previewUrl, 1000),
+  });
+}
+
+async function redditAccessToken(env) {
+  if (redditTokenCache?.token && redditTokenCache.expiresAt > Date.now()) return redditTokenCache.token;
+  const clientId = String(env?.REDDIT_CLIENT_ID || '');
+  const clientSecret = String(env?.REDDIT_CLIENT_SECRET || '');
+  if (!clientId || !clientSecret) {
+    throw new Error('Reddit importing is waiting on an approved Reddit Data API client. For now, paste the recipe text instead.');
+  }
+  const userAgent = String(env?.REDDIT_USER_AGENT || 'web:recipeboy:v1.0.0 (by /u/recipeboy)');
+  const response = await fetch('https://www.reddit.com/api/v1/access_token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': userAgent,
+    },
+    body: 'grant_type=client_credentials',
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(`Reddit authentication returned ${response.status}.`);
+  const result = await response.json();
+  if (!result.access_token) throw new Error('Reddit authentication did not return an access token.');
+  redditTokenCache = {
+    token: result.access_token,
+    expiresAt: Date.now() + Math.max(60, Number(result.expires_in || 3600) - 60) * 1000,
+  };
+  return redditTokenCache.token;
+}
+
+async function recipeFromReddit(url, env) {
+  const postId = redditPostId(url);
+  if (!postId) throw new Error('That Reddit link does not look like a post URL.');
+  const token = await redditAccessToken(env);
+  const userAgent = String(env?.REDDIT_USER_AGENT || 'web:recipeboy:v1.0.0 (by /u/recipeboy)');
+  const response = await fetch(`https://oauth.reddit.com/comments/${postId}?raw_json=1&limit=100&depth=4`, {
+    headers: { Authorization: `Bearer ${token}`, 'User-Agent': userAgent },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(`Reddit returned ${response.status} for that post.`);
+  return recipeFromRedditPayload(await response.json(), url.href);
+}
+
+async function recipeFromUrl(input, env, depth = 0) {
   const url = validatePublicUrl(input);
+  if (redditPostId(url)) return recipeFromReddit(url, env);
   const readerUrl = `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`;
   let directError = '';
   try {
@@ -326,6 +445,8 @@ async function recipeFromUrl(input) {
         const html = (await response.text()).slice(0, MAX_PAGE);
         const node = extractJsonLd(html);
         if (node) return normalizeRecipe(node, response.url || url.href);
+        const linkedRecipe = depth < 2 && canFollowLinkedRecipe(response.url || url.href) ? findLinkedRecipeUrl(html, response.url || url.href) : '';
+        if (linkedRecipe) return recipeFromUrl(linkedRecipe, env, depth + 1);
         directError = 'I could not find structured recipe data on that page.';
       }
     }
@@ -342,6 +463,8 @@ async function recipeFromUrl(input) {
     const payload = await response.json();
     const content = payload?.data?.content || '';
     if (!content) throw new Error('fallback was empty');
+    const linkedRecipe = depth < 2 && canFollowLinkedRecipe(url.href) ? findLinkedRecipeUrl(content, url.href) : '';
+    if (linkedRecipe) return recipeFromUrl(linkedRecipe, env, depth + 1);
     return parseReaderMarkdown(content, url.href, cleanText(payload?.data?.title, 160));
   } catch (error) {
     console.warn('Recipe reader fallback failed', {
@@ -376,9 +499,12 @@ async function createRecipe(request, env) {
       const validatedUrl = validatePublicUrl(input);
       const readerMarkdown = String(body.readerMarkdown).slice(0, 200_000);
       if (!readerMarkdown) throw new Error('The backup reader returned an empty recipe.');
-      recipe = parseReaderMarkdown(readerMarkdown, validatedUrl.href, cleanText(body.readerTitle, 160));
+      const linkedRecipe = canFollowLinkedRecipe(validatedUrl.href) ? findLinkedRecipeUrl(readerMarkdown, validatedUrl.href) : '';
+      recipe = linkedRecipe
+        ? await recipeFromUrl(linkedRecipe, env, 1)
+        : parseReaderMarkdown(readerMarkdown, validatedUrl.href, cleanText(body.readerTitle, 160));
     } else {
-      recipe = /^https?:\/\//i.test(input) ? await recipeFromUrl(input) : parsePlaintext(input);
+      recipe = /^https?:\/\//i.test(input) ? await recipeFromUrl(input, env) : parsePlaintext(input);
     }
   } catch (error) {
     return json({
@@ -427,4 +553,4 @@ export default {
   },
 };
 
-export { deriveRecipeTags, extractJsonLd, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown };
+export { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromRedditPayload, redditPostId };

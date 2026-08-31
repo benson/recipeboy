@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveRecipeTags, extractJsonLd, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown } from '../worker/worker.js';
+import { deriveRecipeTags, extractJsonLd, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromRedditPayload, redditPostId } from '../worker/worker.js';
 
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);
@@ -93,6 +93,22 @@ Eat immediately.`, 'https://example.com/dinner', 'Chicken and Rice');
   assert.equal(recipe.instructions[0], 'Marinate the chicken.');
 });
 
+test('normalizes preparation headings and strips reader checkbox controls', () => {
+  const recipe = parseReaderMarkdown(`## Ingredients
+
+- [x] Deselect All
+- [x] 2 cups flour
+- [x] 1 teaspoon salt
+
+## Preparation
+
+1. Mix the ingredients.
+2. Bake until golden.`, 'https://example.com/cookies', 'Cookies');
+  assert.equal(recipe.ingredients.length, 2);
+  assert.equal(recipe.ingredients[0].item, 'flour');
+  assert.equal(recipe.instructions.length, 2);
+});
+
 test('derives useful protein, dish, and time tags', () => {
   const tags = deriveRecipeTags({
     title: 'Spicy chicken and rice', description: '', prepMinutes: 15, totalMinutes: 75,
@@ -100,4 +116,38 @@ test('derives useful protein, dish, and time tags', () => {
     instructions: ['Cook everything in a skillet.'],
   });
   assert.deepEqual(tags, ['chicken', 'spicy', 'rice', '1+ hours', 'prep ≤ 15 min', 'one-pan']);
+});
+
+test('finds a same-site recipe linked from a cooking article', () => {
+  const article = 'Read the full [Apple Bear Claws](https://cooking.nytimes.com/recipes/787586090-apple-bear-claws) recipe.';
+  assert.equal(
+    findLinkedRecipeUrl(article, 'https://cooking.nytimes.com/article/time-to-learn-your-abcs-apple-bear-claws'),
+    'https://cooking.nytimes.com/recipes/787586090-apple-bear-claws',
+  );
+  assert.equal(findLinkedRecipeUrl('https://example.com/recipes/not-this-one', 'https://cooking.nytimes.com/article/example'), '');
+});
+
+test('recognizes regular and short Reddit post links', () => {
+  assert.equal(redditPostId(new URL('https://www.reddit.com/r/MealPrepSunday/comments/1w236mr/example/')), '1w236mr');
+  assert.equal(redditPostId(new URL('https://redd.it/1w236mr')), '1w236mr');
+  assert.equal(redditPostId(new URL('https://example.com/comments/1w236mr')), '');
+});
+
+test('normalizes a recipe from an OAuth Reddit post payload', () => {
+  const payload = [
+    { data: { children: [{ data: {
+      title: 'Slow Cooker Philly Cheesesteak Rice Bowls',
+      permalink: '/r/MealPrepSunday/comments/1w236mr/example/',
+      selftext: `A set-and-forget lunch.\n\n**Ingredients:**\n- 4 lbs lean top sirloin\n- 4 bell peppers, sliced\n- 3 cups beef broth\n\n**Instructions:**\n1. Place the beef and vegetables in a slow cooker.\n2. Cook on low for 6 hours.\n3. Slice the beef and serve over rice.`,
+      preview: { images: [{ source: { url: 'https://preview.redd.it/example.jpg?width=1080&amp;format=pjpg' } }] },
+    } }] } },
+    { data: { children: [] } },
+  ];
+  const recipe = recipeFromRedditPayload(payload, 'https://www.reddit.com/comments/1w236mr');
+  assert.equal(recipe.title, 'Slow Cooker Philly Cheesesteak Rice Bowls');
+  assert.equal(recipe.ingredients.length, 3);
+  assert.equal(recipe.instructions.length, 3);
+  assert.equal(recipe.sourceName, 'reddit.com');
+  assert.equal(recipe.sourceUrl, 'https://www.reddit.com/r/MealPrepSunday/comments/1w236mr/example/');
+  assert.match(recipe.imageUrl, /&format=pjpg$/);
 });
