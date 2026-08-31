@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractJsonLd, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown } from '../worker/worker.js';
+import { deriveRecipeTags, extractJsonLd, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown } from '../worker/worker.js';
 
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);
@@ -91,4 +91,13 @@ Eat immediately.`, 'https://example.com/dinner', 'Chicken and Rice');
   assert.equal(recipe.ingredients.length, 2);
   assert.equal(recipe.instructions.length, 2);
   assert.equal(recipe.instructions[0], 'Marinate the chicken.');
+});
+
+test('derives useful protein, dish, and time tags', () => {
+  const tags = deriveRecipeTags({
+    title: 'Spicy chicken and rice', description: '', prepMinutes: 15, totalMinutes: 75,
+    ingredients: [{ item: 'chicken thighs' }, { item: 'basmati rice' }, { item: 'harissa hot sauce' }],
+    instructions: ['Cook everything in a skillet.'],
+  });
+  assert.deepEqual(tags, ['chicken', 'spicy', 'rice', '1+ hours', 'prep ≤ 15 min', 'one-pan']);
 });

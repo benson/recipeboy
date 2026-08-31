@@ -35,7 +35,7 @@
           <span class="step-dot">1</span>
           <h2 id="feed-title">Feed Recipeboy</h2>
         </div>
-        <p>A recipe URL or the whole messy thing — both work.</p>
+          <p>Links or messy recipe text — both work.</p>
       </div>
       <form id="recipe-form">
         <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
@@ -60,12 +60,25 @@
             <p id="recipe-count">Loading the recipe box…</p>
           </div>
         </div>
-        <label class="search-wrap">
-          <span aria-hidden="true">⌕</span>
-          <span class="sr-only">Search recipes</span>
-          <input id="search" type="search" placeholder="Search the stash">
-        </label>
+        <div class="collection-tools">
+          <label class="search-wrap">
+            <span aria-hidden="true">⌕</span>
+            <span class="sr-only">Search recipes</span>
+            <input id="search" type="search" placeholder="Search recipes or tags">
+          </label>
+          <label class="sort-wrap">
+            <span>Sort</span>
+            <select id="sort">
+              <option value="newest">Newest</option>
+              <option value="most-made">Most made</option>
+              <option value="quickest">Quickest</option>
+              <option value="a-z">A–Z</option>
+            </select>
+          </label>
+        </div>
       </div>
+
+      <div id="tag-filters" class="tag-filters" aria-label="Filter recipes by tag"></div>
 
       <div id="recipe-grid" class="recipe-grid" aria-live="polite"></div>
       <div id="empty-state" class="empty-state" hidden>
@@ -90,7 +103,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
     <span>Good food. Zero life stories before the recipe.</span>
   </footer>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>
-

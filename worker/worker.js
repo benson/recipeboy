@@ -4,7 +4,7 @@ const MAX_PAGE = 2_000_000;
 function cors() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
@@ -80,6 +80,50 @@ function sourceName(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
+function deriveRecipeTags(recipe) {
+  const text = [recipe.title, recipe.description, ...(recipe.ingredients || []).map((ingredient) => ingredient.item)].join(' ').toLowerCase();
+  const instructions = (recipe.instructions || []).join(' ').toLowerCase();
+  const tags = [];
+  const add = (tag) => { if (tag && !tags.includes(tag)) tags.push(tag); };
+  const proteins = [
+    ['chicken', /\bchicken\b/], ['beef', /\b(?:beef|steak|brisket)\b/], ['pork', /\b(?:pork|bacon|ham|prosciutto|sausage)\b/],
+    ['turkey', /\bturkey\b/], ['lamb', /\blamb\b/], ['seafood', /\b(?:fish|salmon|tuna|shrimp|prawn|cod|tilapia|crab|lobster|scallop)\b/],
+    ['tofu', /\b(?:tofu|tempeh)\b/], ['beans', /\b(?:beans?|lentils?|chickpeas?)\b/],
+  ];
+  for (const [tag, pattern] of proteins) if (pattern.test(text)) add(tag);
+
+  const hasMeat = proteins.slice(0, 6).some(([, pattern]) => pattern.test(text));
+  if (!hasMeat) add('vegetarian');
+  if (/\b(?:chili|chilli|jalapeño|jalapeno|cayenne|hot sauce|harissa|sriracha)\b/.test(text)) add('spicy');
+
+  const dishes = [
+    ['breakfast', /\b(?:breakfast|pancakes?|waffles?|french toast|omelettes?|frittatas?)\b/],
+    ['dessert', /\b(?:dessert|cookies?|cakes?|pies?|brownies?|pudding|frosting)\b/],
+    ['pasta', /\b(?:pasta|spaghetti|linguine|penne|rigatoni|macaroni|lasagna|noodles?)\b/],
+    ['rice', /\b(?:rice|risotto)\b/], ['soup', /\b(?:soup|stew|chowder|bisque)\b/],
+    ['salad', /\bsalad\b/], ['sandwich', /\b(?:sandwich|burger|wrap|taco|burrito)\b/],
+  ];
+  for (const [tag, pattern] of dishes) if (pattern.test(text)) add(tag);
+
+  const total = Number(recipe.totalMinutes || 0);
+  if (total > 0 && total <= 30) add('≤ 30 min');
+  else if (total <= 60 && total > 30) add('30–60 min');
+  else if (total > 60) add('1+ hours');
+
+  const prep = Number(recipe.prepMinutes || 0);
+  if (prep > 0 && prep <= 15) add('prep ≤ 15 min');
+  else if (prep <= 30 && prep > 15) add('prep 15–30 min');
+  else if (prep > 30) add('prep 30+ min');
+
+  if (/\b(?:skillet|one pot|one-pot|sheet pan|sheet-pan)\b/.test(`${text} ${instructions}`)) add('one-pan');
+  return tags;
+}
+
+function withDerivedTags(recipe) {
+  const original = toArray(recipe.tags).map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean);
+  return { ...recipe, tags: [...new Set([...deriveRecipeTags(recipe), ...original])].slice(0, 16) };
+}
+
 function normalizeRecipe(raw, sourceUrl = '') {
   const ingredients = toArray(raw.recipeIngredient || raw.ingredients)
     .map((item) => typeof item === 'string' ? item : item?.text || item?.name)
@@ -106,7 +150,7 @@ function normalizeRecipe(raw, sourceUrl = '') {
     imageUrl: cleanText(imageUrl, 1000),
   };
   if (!recipe.totalMinutes) recipe.totalMinutes = recipe.prepMinutes + recipe.cookMinutes;
-  return recipe;
+  return withDerivedTags(recipe);
 }
 
 function sectionName(line) {
@@ -312,7 +356,7 @@ async function recipeFromUrl(input) {
 }
 
 function rowToRecipe(row) {
-  const recipe = JSON.parse(row.data_json);
+  const recipe = withDerivedTags(JSON.parse(row.data_json));
   return { id: row.id, ...recipe, madeCount: row.made_count, createdAt: row.created_at };
 }
 
@@ -356,6 +400,12 @@ async function markMade(id, env) {
   return json({ id, madeCount: row.made_count });
 }
 
+async function deleteRecipe(id, env) {
+  const row = await env.DB.prepare('DELETE FROM recipes WHERE id = ? RETURNING id').bind(id).first();
+  if (!row) return json({ error: 'Recipe not found.' }, 404);
+  return json({ id, deleted: true });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors() });
@@ -367,6 +417,8 @@ export default {
       if (request.method === 'POST' && path === '/recipes') return createRecipe(request, env);
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
       if (request.method === 'POST' && madeMatch) return markMade(madeMatch[1], env);
+      const recipeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)$/);
+      if (request.method === 'DELETE' && recipeMatch) return deleteRecipe(recipeMatch[1], env);
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
       console.error(error);
@@ -375,4 +427,4 @@ export default {
   },
 };
 
-export { extractJsonLd, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown };
+export { deriveRecipeTags, extractJsonLd, findRecipeNode, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown };

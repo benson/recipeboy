@@ -2,7 +2,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8787'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], query: '', activeId: null };
+const state = { recipes: [], query: '', tag: '', sort: 'newest', activeId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -11,6 +11,8 @@ const el = {
   empty: document.getElementById('empty-state'),
   count: document.getElementById('recipe-count'),
   search: document.getElementById('search'),
+  sort: document.getElementById('sort'),
+  tagFilters: document.getElementById('tag-filters'),
   dialog: document.getElementById('recipe-dialog'),
   dialogContent: document.getElementById('dialog-content'),
   toast: document.getElementById('toast'),
@@ -92,14 +94,31 @@ function showToast(message) {
 
 function visibleRecipes() {
   const query = state.query.trim().toLowerCase();
-  if (!query) return state.recipes;
-  return state.recipes.filter((recipe) => [
+  const filtered = state.recipes.filter((recipe) => (!state.tag || (recipe.tags || []).includes(state.tag)) && (!query || [
     recipe.title,
     recipe.description,
     recipe.sourceName,
     ...(recipe.tags || []),
     ...(recipe.ingredients || []).map((item) => item.item),
-  ].join(' ').toLowerCase().includes(query));
+  ].join(' ').toLowerCase().includes(query)));
+  return filtered.sort((a, b) => {
+    if (state.sort === 'most-made') return (b.madeCount || 0) - (a.madeCount || 0) || String(b.createdAt).localeCompare(String(a.createdAt));
+    if (state.sort === 'quickest') return (a.totalMinutes || Number.MAX_SAFE_INTEGER) - (b.totalMinutes || Number.MAX_SAFE_INTEGER);
+    if (state.sort === 'a-z') return a.title.localeCompare(b.title);
+    return String(b.createdAt).localeCompare(String(a.createdAt));
+  });
+}
+
+function renderTagFilters() {
+  const counts = new Map();
+  for (const recipe of state.recipes) {
+    for (const tag of recipe.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
+  }
+  const tags = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  el.tagFilters.hidden = !tags.length;
+  el.tagFilters.innerHTML = `<button class="tag-filter ${state.tag ? '' : 'active'}" data-tag="">All <span>${state.recipes.length}</span></button>${tags.map(([tag, count]) =>
+    `<button class="tag-filter ${state.tag === tag ? 'active' : ''}" data-tag="${esc(tag)}">${esc(tag)} <span>${count}</span></button>`
+  ).join('')}`;
 }
 
 function cardTemplate(recipe) {
@@ -116,6 +135,7 @@ function cardTemplate(recipe) {
         ${recipe.yield ? `<span class="pill">♨ ${esc(recipe.yield)}</span>` : ''}
         <span class="pill">${recipe.ingredients.length} ingredients</span>
       </div>
+      ${(recipe.tags || []).length ? `<div class="card-tags">${recipe.tags.slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="card-actions">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
@@ -126,13 +146,14 @@ function cardTemplate(recipe) {
 
 function render() {
   const recipes = visibleRecipes();
+  renderTagFilters();
   el.grid.innerHTML = recipes.map(cardTemplate).join('');
   const total = state.recipes.length;
   el.count.textContent = total ? `${total} keeper${total === 1 ? '' : 's'} in the shared box` : 'No recipes in the box yet';
   el.empty.hidden = recipes.length > 0;
-  if (!recipes.length && state.query) {
+  if (!recipes.length && (state.query || state.tag)) {
     el.empty.querySelector('h3').textContent = 'No bites found.';
-    el.empty.querySelector('p').textContent = 'Try another ingredient or recipe name.';
+    el.empty.querySelector('p').textContent = 'Try another ingredient, name, or tag.';
   } else {
     el.empty.querySelector('h3').textContent = 'His recipe box is hungry.';
     el.empty.querySelector('p').textContent = 'Paste the first family favorite up above.';
@@ -158,6 +179,7 @@ function detailTemplate(recipe) {
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
       <button class="action-button made" data-made="${esc(recipe.id)}">I made this! · ${recipe.madeCount || 0}</button>
       ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
+      <button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>
     </div>
     <div class="recipe-columns">
       <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
@@ -169,6 +191,7 @@ function openRecipe(id) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   state.activeId = id;
+  state.confirmDeleteId = null;
   el.dialogContent.innerHTML = detailTemplate(recipe);
   el.dialog.showModal();
 }
@@ -188,6 +211,26 @@ async function markMade(id) {
     render();
     refreshDialog();
     showToast(result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`);
+  } catch (error) { showToast(error.message); }
+}
+
+async function deleteRecipe(id) {
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
+  if (state.confirmDeleteId !== id) {
+    state.confirmDeleteId = id;
+    refreshDialog();
+    return;
+  }
+
+  try {
+    await api(`/recipes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    state.recipes = state.recipes.filter((item) => item.id !== id);
+    state.confirmDeleteId = null;
+    state.activeId = null;
+    el.dialog.close();
+    render();
+    showToast(`Deleted “${recipe.title}”.`);
   } catch (error) { showToast(error.message); }
 }
 
@@ -227,6 +270,8 @@ async function handleAction(event) {
   }
   const madeButton = event.target.closest('[data-made]');
   if (madeButton) return markMade(madeButton.dataset.made);
+  const deleteButton = event.target.closest('[data-delete]');
+  if (deleteButton) return deleteRecipe(deleteButton.dataset.delete);
   const openTarget = event.target.closest('[data-open]');
   if (openTarget) openRecipe(openTarget.dataset.open);
 }
@@ -242,7 +287,18 @@ el.grid.addEventListener('keydown', (event) => {
 el.dialog.addEventListener('click', handleAction);
 document.getElementById('dialog-close').addEventListener('click', () => el.dialog.close());
 el.dialog.addEventListener('click', (event) => { if (event.target === el.dialog) el.dialog.close(); });
+el.dialog.addEventListener('close', () => {
+  state.activeId = null;
+  state.confirmDeleteId = null;
+});
 el.search.addEventListener('input', () => { state.query = el.search.value; render(); });
+el.sort.addEventListener('change', () => { state.sort = el.sort.value; render(); });
+el.tagFilters.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-tag]');
+  if (!button) return;
+  state.tag = button.dataset.tag;
+  render();
+});
 
 try {
   const result = await api('/recipes');
