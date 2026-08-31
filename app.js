@@ -135,9 +135,11 @@ function renderTagFilters() {
     for (const tag of recipe.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
   }
   const tags = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const commonTags = new Set(tags.filter(([, count]) => count > 1).slice(0, 6).map(([tag]) => tag));
+  if (state.tag) commonTags.add(state.tag);
   el.tagFilters.hidden = !tags.length;
-  el.tagFilters.innerHTML = `<button class="tag-filter ${state.tag ? '' : 'active'}" data-tag="">All <span>${state.recipes.length}</span></button>${tags.map(([tag, count]) =>
-    `<button class="tag-filter ${state.tag === tag ? 'active' : ''}" data-tag="${esc(tag)}">${esc(tag)} <span>${count}</span></button>`
+  el.tagFilters.innerHTML = `<button class="tag-filter ${state.tag ? '' : 'active'}" data-tag=""><span class="tag-name">All</span> <span class="tag-count">${state.recipes.length}</span></button>${tags.map(([tag, count]) =>
+    `<button class="tag-filter ${commonTags.has(tag) ? '' : 'tag-filter-overflow'} ${state.tag === tag ? 'active' : ''}" data-tag="${esc(tag)}"><span class="tag-name">${esc(tag)}</span> <span class="tag-count">${count}</span></button>`
   ).join('')}`;
 }
 
