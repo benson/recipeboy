@@ -3,8 +3,8 @@ main = "worker.js"
 compatibility_date = "2026-08-31"
 
 [vars]
-CLERK_ISSUER = "https://clerk.bensonperry.com"
-CLERK_AUTHORIZED_PARTIES = "https://bensonperry.com,http://127.0.0.1:4173,http://localhost:4173"
+CLERK_ISSUER = "https://clerk.recipeboy.bensonperry.com"
+CLERK_AUTHORIZED_PARTIES = "https://recipeboy.bensonperry.com,http://127.0.0.1:4173,http://localhost:4173"
 
 [[d1_databases]]
 binding = "DB"
@@ -30,6 +30,14 @@ namespace_id = "726931002"
 [[ratelimits]]
 name = "MADE_RATE_LIMITER"
 namespace_id = "726931003"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "SOCIAL_RATE_LIMITER"
+namespace_id = "726931004"
 
   [ratelimits.simple]
   limit = 30

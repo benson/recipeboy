@@ -8,7 +8,7 @@ let redditTokenCache = null;
 function cors() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type',
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
@@ -124,6 +124,61 @@ async function readJsonRequest(request) {
 
 function cleanText(value, limit = 5000) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+const AVATAR_BACKGROUNDS = new Set(['sunshine', 'tomato', 'blueberry', 'mint']);
+const AVATAR_ACCESSORIES = new Set(['none', 'chef', 'crown', 'cowboy', 'party']);
+const AVATAR_BADGES = new Set(['spoon', 'heart', 'fire', 'star']);
+
+function normalizeAvatar(value = {}) {
+  const avatar = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    background: AVATAR_BACKGROUNDS.has(avatar.background) ? avatar.background : 'sunshine',
+    accessory: AVATAR_ACCESSORIES.has(avatar.accessory) ? avatar.accessory : 'none',
+    badge: AVATAR_BADGES.has(avatar.badge) ? avatar.badge : 'spoon',
+  };
+}
+
+function profileFromRow(row, fallbackName = 'Recipe friend') {
+  let avatar = {};
+  try { avatar = JSON.parse(row?.avatar_json || '{}'); } catch {}
+  return {
+    displayName: cleanText(row?.display_name, 32) || fallbackName,
+    avatar: normalizeAvatar(avatar),
+  };
+}
+
+async function profileForUser(env, userId) {
+  const row = await env.DB.prepare('SELECT display_name, avatar_json FROM user_profiles WHERE user_id = ?').bind(userId).first();
+  return profileFromRow(row);
+}
+
+async function ensureProfile(request, env, userId) {
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  const displayName = cleanText(body.displayName, 32) || 'Recipe friend';
+  const avatar = normalizeAvatar(body.avatar);
+  const now = new Date().toISOString();
+  await env.DB.prepare('INSERT OR IGNORE INTO user_profiles (user_id, display_name, avatar_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(userId, displayName, JSON.stringify(avatar), now, now).run();
+  return json({ profile: await profileForUser(env, userId) });
+}
+
+async function updateProfile(request, env, userId) {
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  const displayName = cleanText(body.displayName, 32);
+  if (!displayName) return json({ error: 'Give your Recipeboy a name.' }, 400);
+  const avatar = normalizeAvatar(body.avatar);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO user_profiles (user_id, display_name, avatar_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, avatar_json = excluded.avatar_json, updated_at = excluded.updated_at
+  `).bind(userId, displayName, JSON.stringify(avatar), now, now).run();
+  return json({ profile: { displayName, avatar } });
 }
 
 function decodeHtml(value = '') {
@@ -795,6 +850,12 @@ function rowToRecipe(row) {
     ...recipe,
     madeCount: row.made_count,
     madeByViewer: Boolean(row.made_by_viewer),
+    ratingAverage: Number(row.rating_average || 0),
+    ratingCount: Number(row.rating_count || 0),
+    viewerRating: Number(row.viewer_rating || 0),
+    viewerReview: String(row.viewer_review || ''),
+    makers: [],
+    reviews: [],
     createdAt: row.created_at,
   };
 }
@@ -802,13 +863,51 @@ function rowToRecipe(row) {
 async function listRecipes(env, userId) {
   const { results } = await env.DB.prepare(`
     SELECT r.id, r.data_json, r.made_count, r.created_at,
-      EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer
+      EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer,
+      COALESCE((SELECT AVG(rr.rating) FROM recipe_reviews rr WHERE rr.recipe_id = r.id), 0) AS rating_average,
+      (SELECT COUNT(*) FROM recipe_reviews rr WHERE rr.recipe_id = r.id) AS rating_count,
+      COALESCE((SELECT rr.rating FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), 0) AS viewer_rating,
+      COALESCE((SELECT rr.review_text FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), '') AS viewer_review
     FROM recipes r
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId).all();
-  return results.map(rowToRecipe);
+  `).bind(userId, userId, userId).all();
+  const recipes = results.map(rowToRecipe);
+  if (!recipes.length) return recipes;
+
+  const [makerRows, reviewRows] = await Promise.all([
+    env.DB.prepare(`
+      SELECT m.recipe_id, m.user_id, m.created_at, p.display_name, p.avatar_json
+      FROM recipe_makes m
+      JOIN recipes r ON r.id = m.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = m.user_id
+      ORDER BY m.created_at ASC
+    `).all(),
+    env.DB.prepare(`
+      SELECT rr.recipe_id, rr.user_id, rr.rating, rr.review_text, rr.updated_at, p.display_name, p.avatar_json
+      FROM recipe_reviews rr
+      JOIN recipes r ON r.id = rr.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = rr.user_id
+      ORDER BY rr.updated_at DESC
+    `).all(),
+  ]);
+  const byId = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  for (const row of makerRows.results || []) {
+    const recipe = byId.get(row.recipe_id);
+    if (recipe) recipe.makers.push({ ...profileFromRow(row), madeAt: row.created_at, isViewer: row.user_id === userId });
+  }
+  for (const row of reviewRows.results || []) {
+    const recipe = byId.get(row.recipe_id);
+    if (recipe) recipe.reviews.push({
+      ...profileFromRow(row),
+      rating: Number(row.rating),
+      text: String(row.review_text || ''),
+      updatedAt: row.updated_at,
+      isViewer: row.user_id === userId,
+    });
+  }
+  return recipes;
 }
 
 async function createRecipe(request, env, userId) {
@@ -861,9 +960,59 @@ async function markMade(id, env, userId) {
   const inserted = await env.DB.prepare('INSERT OR IGNORE INTO recipe_makes (recipe_id, user_id, created_at) VALUES (?, ?, ?)')
     .bind(id, userId, new Date().toISOString()).run();
   const alreadyMade = Number(inserted.meta?.changes || 0) === 0;
-  if (alreadyMade) return json({ id, madeCount: recipe.made_count, madeByViewer: true, alreadyMade: true });
+  const maker = { ...(await profileForUser(env, userId)), madeAt: new Date().toISOString(), isViewer: true };
+  if (alreadyMade) return json({ id, madeCount: recipe.made_count, madeByViewer: true, alreadyMade: true, maker });
   const row = await env.DB.prepare('UPDATE recipes SET made_count = made_count + 1 WHERE id = ? RETURNING made_count').bind(id).first();
-  return json({ id, madeCount: row?.made_count ?? recipe.made_count + 1, madeByViewer: true, alreadyMade: false });
+  return json({ id, madeCount: row?.made_count ?? recipe.made_count + 1, madeByViewer: true, alreadyMade: false, maker });
+}
+
+async function recipeReviewSummary(id, env, userId) {
+  const aggregate = await env.DB.prepare('SELECT COALESCE(AVG(rating), 0) AS rating_average, COUNT(*) AS rating_count FROM recipe_reviews WHERE recipe_id = ?').bind(id).first();
+  const { results } = await env.DB.prepare(`
+    SELECT rr.user_id, rr.rating, rr.review_text, rr.updated_at, p.display_name, p.avatar_json
+    FROM recipe_reviews rr
+    LEFT JOIN user_profiles p ON p.user_id = rr.user_id
+    WHERE rr.recipe_id = ?
+    ORDER BY rr.updated_at DESC
+  `).bind(id).all();
+  const reviews = (results || []).map((row) => ({
+    ...profileFromRow(row),
+    rating: Number(row.rating),
+    text: String(row.review_text || ''),
+    updatedAt: row.updated_at,
+    isViewer: row.user_id === userId,
+  }));
+  const viewer = reviews.find((review) => review.isViewer);
+  return {
+    ratingAverage: Number(aggregate?.rating_average || 0),
+    ratingCount: Number(aggregate?.rating_count || 0),
+    viewerRating: viewer?.rating || 0,
+    viewerReview: viewer?.text || '',
+    reviews,
+  };
+}
+
+async function saveReview(id, request, env, userId) {
+  const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+  if (!recipe) return json({ error: 'Recipe not found.' }, 404);
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  const rating = Number(body.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return json({ error: 'Choose a rating from 1 to 5.' }, 400);
+  const reviewText = String(body.review || '').replace(/\0/g, '').replace(/\r\n?/g, '\n').trim().slice(0, 1000);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO recipe_reviews (recipe_id, user_id, rating, review_text, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(recipe_id, user_id) DO UPDATE SET rating = excluded.rating, review_text = excluded.review_text, updated_at = excluded.updated_at
+  `).bind(id, userId, rating, reviewText, now, now).run();
+  return json(await recipeReviewSummary(id, env, userId));
+}
+
+async function deleteReview(id, env, userId) {
+  await env.DB.prepare('DELETE FROM recipe_reviews WHERE recipe_id = ? AND user_id = ?').bind(id, userId).run();
+  return json(await recipeReviewSummary(id, env, userId));
 }
 
 async function deleteRecipe(id, env) {
@@ -896,6 +1045,12 @@ export default {
       let auth;
       try { auth = await authenticate(request, env); }
       catch { return json({ error: 'Sign in to use the shared recipe box.' }, 401); }
+      if (request.method === 'GET' && path === '/profile') return json({ profile: await profileForUser(env, auth.userId) });
+      if (request.method === 'POST' && path === '/profile/ensure') return ensureProfile(request, env, auth.userId);
+      if (request.method === 'PUT' && path === '/profile') {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing your look again.');
+        return limited || updateProfile(request, env, auth.userId);
+      }
       if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env, auth.userId) });
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
@@ -905,6 +1060,15 @@ export default {
       if (request.method === 'POST' && madeMatch) {
         const limited = await rateLimit(request, env.MADE_RATE_LIMITER, 'Recipeboy believes you. Give the button a minute.');
         return limited || markMade(madeMatch[1], env, auth.userId);
+      }
+      const reviewMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/review$/);
+      if (request.method === 'POST' && reviewMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before adding more tasting notes.');
+        return limited || saveReview(reviewMatch[1], request, env, auth.userId);
+      }
+      if (request.method === 'DELETE' && reviewMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more tasting notes.');
+        return limited || deleteReview(reviewMatch[1], env, auth.userId);
       }
       const restoreMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/restore$/);
       if (request.method === 'POST' && restoreMatch) {
@@ -924,4 +1088,4 @@ export default {
   },
 };
 
-export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt };
+export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeAvatar, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt };

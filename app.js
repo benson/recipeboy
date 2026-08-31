@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], query: '', tag: '', sort: 'newest', activeId: null, confirmDeleteId: null };
+const state = { recipes: [], profile: null, query: '', tag: '', sort: 'newest', activeId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -17,6 +17,8 @@ const el = {
   tagFilters: document.getElementById('tag-filters'),
   dialog: document.getElementById('recipe-dialog'),
   dialogContent: document.getElementById('dialog-content'),
+  profileDialog: document.getElementById('profile-dialog'),
+  profileContent: document.getElementById('profile-content'),
   toast: document.getElementById('toast'),
   bookmarkletDock: document.getElementById('bookmarklet-dock'),
   bookmarkletDismiss: document.getElementById('bookmarklet-dismiss'),
@@ -28,7 +30,7 @@ const el = {
   signIn: document.getElementById('sign-in-button'),
   signOut: document.getElementById('sign-out-button'),
   account: document.getElementById('account-button'),
-  accountInitial: document.getElementById('account-initial'),
+  accountAvatar: document.getElementById('account-avatar'),
   accountLabel: document.getElementById('account-label'),
 };
 
@@ -38,6 +40,29 @@ let loadedUserId = '';
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
+
+const AVATAR_DEFAULT = { background: 'sunshine', accessory: 'none', badge: 'spoon' };
+const AVATAR_ACCESSORIES = { none: '', chef: '🧑‍🍳', crown: '👑', cowboy: '🤠', party: '🥳' };
+const AVATAR_BADGES = { spoon: '🥄', heart: '♥', fire: '🔥', star: '★' };
+
+function avatarTemplate(profile = {}, extraClass = '') {
+  const avatar = { ...AVATAR_DEFAULT, ...(profile.avatar || {}) };
+  const accessory = AVATAR_ACCESSORIES[avatar.accessory] || '';
+  const badge = AVATAR_BADGES[avatar.badge] || AVATAR_BADGES.spoon;
+  return `<span class="recipeboy-avatar avatar-${esc(avatar.background)} ${esc(extraClass)}">
+    <img src="assets/recipeboy-mascot.svg" alt="">
+    ${accessory ? `<span class="avatar-accessory" aria-hidden="true">${accessory}</span>` : ''}
+    <span class="avatar-badge" aria-hidden="true">${badge}</span>
+  </span>`;
+}
+
+function starText(rating) {
+  return `${'★'.repeat(Math.max(0, Math.min(5, Number(rating) || 0)))}${'☆'.repeat(Math.max(0, 5 - (Number(rating) || 0)))}`;
+}
+
+function ratingSummary(recipe) {
+  return recipe.ratingCount ? `${Number(recipe.ratingAverage).toFixed(1)} ★ · ${recipe.ratingCount}` : 'Not rated yet';
+}
 
 function safeUrl(value) {
   try {
@@ -89,7 +114,7 @@ async function normalizeInput(input, button, extra = {}) {
   }
 }
 
-const bookmarkletSource = `(()=>{const tidy=s=>String(s||'').replace(/\\n{3,}/g,'\\n\\n').trim();const title=tidy(document.title.replace(/\\s*[-|:]\\s*Reddit.*$/i,''));const selected=tidy(String(getSelection()));const nodes=[...document.querySelectorAll('shreddit-post,[data-testid="post-container"],article,.usertext-body,.entry')];const score=e=>{const t=tidy(e.innerText);return (/ingredients?|directions?|instructions?|method/i.test(t)?100000:0)+Math.min(t.length,50000)};nodes.sort((a,b)=>score(b)-score(a));const pageText=selected||tidy(nodes[0]?.innerText)||tidy(document.querySelector('main')?.innerText)||tidy(document.body.innerText);if(pageText.length<40){alert('Recipeboy could not find enough recipe text on this page. Select the recipe text and try again.');return}const payload=encodeURIComponent(JSON.stringify({text:(title+'\\n'+pageText).slice(0,48000),sourceUrl:location.href,sourceTitle:title}));open('https://bensonperry.com/recipeboy/#clip='+payload,'_blank','noopener')})()`;
+const bookmarkletSource = `(()=>{const tidy=s=>String(s||'').replace(/\\n{3,}/g,'\\n\\n').trim();const title=tidy(document.title.replace(/\\s*[-|:]\\s*Reddit.*$/i,''));const selected=tidy(String(getSelection()));const nodes=[...document.querySelectorAll('shreddit-post,[data-testid="post-container"],article,.usertext-body,.entry')];const score=e=>{const t=tidy(e.innerText);return (/ingredients?|directions?|instructions?|method/i.test(t)?100000:0)+Math.min(t.length,50000)};nodes.sort((a,b)=>score(b)-score(a));const pageText=selected||tidy(nodes[0]?.innerText)||tidy(document.querySelector('main')?.innerText)||tidy(document.body.innerText);if(pageText.length<40){alert('Recipeboy could not find enough recipe text on this page. Select the recipe text and try again.');return}const payload=encodeURIComponent(JSON.stringify({text:(title+'\\n'+pageText).slice(0,48000),sourceUrl:location.href,sourceTitle:title}));open('https://recipeboy.bensonperry.com/#clip='+payload,'_blank','noopener')})()`;
 const BOOKMARKLET_DISMISSED_KEY = 'recipeboy-bookmarklet-dismissed';
 
 el.bookmarkletDock.hidden = true;
@@ -210,6 +235,7 @@ function renderTagFilters() {
 function cardTemplate(recipe) {
   const time = minutesLabel(recipe);
   const source = recipe.sourceName || (recipe.sourceUrl ? 'From the web' : 'Friends’ recipe');
+  const makers = (recipe.makers || []).slice(0, 4);
   return `<article class="recipe-card" data-id="${esc(recipe.id)}">
     <div class="card-color"></div>
     <div class="card-body" data-open="${esc(recipe.id)}" tabindex="0" role="button" aria-label="Open ${esc(recipe.title)}">
@@ -220,8 +246,10 @@ function cardTemplate(recipe) {
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
         ${recipe.yield ? `<span class="meta-item">♨ ${esc(recipe.yield)}</span>` : ''}
         <span class="meta-item">${recipe.ingredients.length} ingredients</span>
+        ${recipe.ratingCount ? `<span class="meta-item rating-summary">★ ${Number(recipe.ratingAverage).toFixed(1)}</span>` : ''}
       </div>
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
+      ${makers.length ? `<div class="card-makers" aria-label="Made by ${recipe.madeCount} friends"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span>${recipe.madeCount} made it</span></div>` : ''}
     </div>
     <div class="card-actions">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
@@ -244,6 +272,50 @@ function render() {
     el.empty.querySelector('h3').textContent = 'His recipe box is hungry.';
     el.empty.querySelector('p').textContent = 'Paste the first family favorite up above.';
   }
+}
+
+function socialTemplate(recipe) {
+  const makers = recipe.makers || [];
+  const writtenReviews = (recipe.reviews || []).filter((review) => review.text);
+  const selectedRating = Number(recipe.viewerRating || 0);
+  return `<section class="recipe-social" aria-label="Friends’ ratings and notes">
+    <div class="social-summary">
+      <div>
+        <span class="social-eyebrow">The tasting table</span>
+        <h3>${recipe.ratingCount ? `${Number(recipe.ratingAverage).toFixed(1)} out of 5` : 'Be the first to rate it'}</h3>
+        <p class="big-stars" aria-label="${esc(ratingSummary(recipe))}">${starText(Math.round(recipe.ratingAverage || 0))}</p>
+        <p>${recipe.ratingCount || 0} rating${recipe.ratingCount === 1 ? '' : 's'}</p>
+      </div>
+      <form class="review-form" data-review-form="${esc(recipe.id)}">
+        <fieldset>
+          <legend>Your rating</legend>
+          <input type="hidden" name="rating" value="${selectedRating}">
+          <div class="star-picker" aria-label="Choose a rating from 1 to 5">
+            ${[1, 2, 3, 4, 5].map((rating) => `<button type="button" class="star-choice ${rating <= selectedRating ? 'selected' : ''}" data-rating="${rating}" aria-label="${rating} star${rating === 1 ? '' : 's'}" aria-pressed="${rating === selectedRating}">★</button>`).join('')}
+          </div>
+        </fieldset>
+        <label for="review-${esc(recipe.id)}">A note for your friends <span>optional</span></label>
+        <textarea id="review-${esc(recipe.id)}" name="review" rows="3" maxlength="1000" placeholder="Worth doubling? Better with extra garlic?">${esc(recipe.viewerReview || '')}</textarea>
+        <div class="review-form-actions">
+          <button class="primary-button" type="submit">${selectedRating ? 'Update rating' : 'Save rating'}</button>
+          ${selectedRating ? `<button class="text-button" type="button" data-remove-review="${esc(recipe.id)}">Remove mine</button>` : ''}
+        </div>
+      </form>
+    </div>
+    <div class="friend-columns">
+      <div class="made-by-panel">
+        <h3>Made by</h3>
+        ${makers.length ? `<div class="maker-list">${makers.map((maker) => `<div class="maker-chip">${avatarTemplate(maker, 'avatar-small')}<span>${esc(maker.displayName)}</span></div>`).join('')}</div>` : '<p>No cooks yet. You could be first.</p>'}
+      </div>
+      <div class="reviews-panel">
+        <h3>Friend notes</h3>
+        ${writtenReviews.length ? `<div class="review-list">${writtenReviews.map((review) => `<article class="friend-review">
+          ${avatarTemplate(review, 'avatar-small')}
+          <div><div class="review-heading"><strong>${esc(review.displayName)}</strong><span aria-label="${review.rating} out of 5 stars">${starText(review.rating)}</span></div><p>${esc(review.text)}</p></div>
+        </article>`).join('')}</div>` : '<p>No notes yet—just hungry anticipation.</p>'}
+      </div>
+    </div>
+  </section>`;
 }
 
 function detailTemplate(recipe) {
@@ -274,7 +346,8 @@ function detailTemplate(recipe) {
     <div class="recipe-columns">
       <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
       <section><h3>What to do</h3><ol class="steps">${steps || '<li>Instructions weren’t listed.</li>'}</ol></section>
-    </div>`;
+    </div>
+    ${socialTemplate(recipe)}`;
 }
 
 function openRecipe(id, updateHash = true) {
@@ -295,6 +368,111 @@ function refreshDialog() {
   if (recipe) el.dialogContent.innerHTML = detailTemplate(recipe);
 }
 
+function profileTemplate(profile) {
+  const avatar = { ...AVATAR_DEFAULT, ...(profile.avatar || {}) };
+  const backgrounds = [
+    ['sunshine', 'Sunshine'], ['tomato', 'Tomato'], ['blueberry', 'Blueberry'], ['mint', 'Mint'],
+  ];
+  const accessories = [
+    ['none', 'Just the bulb'], ['chef', 'Chef'], ['crown', 'Royal'], ['cowboy', 'Cowboy'], ['party', 'Party'],
+  ];
+  const badges = [
+    ['spoon', 'Spoon'], ['heart', 'Heart'], ['fire', 'Spicy'], ['star', 'Star'],
+  ];
+  return `<div class="profile-hero">
+      <div id="profile-avatar-preview" class="profile-avatar-preview">${avatarTemplate(profile, 'avatar-large')}</div>
+      <div><span class="social-eyebrow">Your tiny sous-chef</span><h2>Make him yours</h2><p>This Recipeboy follows your ratings, reviews, and cooking victories around the shared box.</p></div>
+    </div>
+    <form id="profile-form" class="profile-form">
+      <label class="profile-name">Display name<input name="displayName" maxlength="32" required value="${esc(profile.displayName || '')}"></label>
+      <fieldset><legend>Backdrop</legend><div class="avatar-options">${backgrounds.map(([value, label]) => `<label class="avatar-option color-option avatar-${value}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Top it off</legend><div class="avatar-options">${accessories.map(([value, label]) => `<label class="avatar-option"><input type="radio" name="accessory" value="${value}" ${avatar.accessory === value ? 'checked' : ''}><span class="option-emoji" aria-hidden="true">${AVATAR_ACCESSORIES[value] || '✓'}</span><strong>${label}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Favorite flavor</legend><div class="avatar-options">${badges.map(([value, label]) => `<label class="avatar-option"><input type="radio" name="badge" value="${value}" ${avatar.badge === value ? 'checked' : ''}><span class="option-emoji" aria-hidden="true">${AVATAR_BADGES[value]}</span><strong>${label}</strong></label>`).join('')}</div></fieldset>
+      <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button></div>
+    </form>`;
+}
+
+function renderAccountProfile() {
+  if (!state.profile) return;
+  el.accountAvatar.innerHTML = avatarTemplate(state.profile, 'avatar-account');
+  el.accountLabel.textContent = state.profile.displayName;
+}
+
+function openProfile() {
+  if (!state.profile) return;
+  el.profileContent.innerHTML = profileTemplate(state.profile);
+  el.profileDialog.showModal();
+}
+
+function profileFormAvatar(form) {
+  const data = new FormData(form);
+  return { background: data.get('background'), accessory: data.get('accessory'), badge: data.get('badge') };
+}
+
+function refreshProfilePreview() {
+  const form = document.getElementById('profile-form');
+  const preview = document.getElementById('profile-avatar-preview');
+  if (!form || !preview) return;
+  preview.innerHTML = avatarTemplate({ avatar: profileFormAvatar(form) }, 'avatar-large');
+}
+
+function replaceViewerProfile(profile) {
+  for (const recipe of state.recipes) {
+    recipe.makers = (recipe.makers || []).map((maker) => maker.isViewer ? { ...maker, ...profile } : maker);
+    recipe.reviews = (recipe.reviews || []).map((review) => review.isViewer ? { ...review, ...profile } : review);
+  }
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const form = event.target.closest('#profile-form');
+  const data = new FormData(form);
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const result = await api('/profile', { method: 'PUT', body: JSON.stringify({ displayName: data.get('displayName'), avatar: profileFormAvatar(form) }) });
+    state.profile = result.profile;
+    replaceViewerProfile(state.profile);
+    renderAccountProfile();
+    render();
+    refreshDialog();
+    el.profileDialog.close();
+    showToast('Your little Recipeboy is ready!');
+  } catch (error) { showToast(error.message); }
+  finally { button.disabled = false; }
+}
+
+async function saveReview(event) {
+  event.preventDefault();
+  const form = event.target.closest('[data-review-form]');
+  if (!form) return;
+  const id = form.dataset.reviewForm;
+  const recipe = state.recipes.find((item) => item.id === id);
+  const data = new FormData(form);
+  const rating = Number(data.get('rating'));
+  if (!rating) return showToast('Tap a star first!');
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    Object.assign(recipe, await api(`/recipes/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify({ rating, review: data.get('review') }) }));
+    render();
+    refreshDialog();
+    showToast(recipe.viewerReview ? 'Tasting note saved!' : 'Rating saved!');
+  } catch (error) { showToast(error.message); }
+  finally { button.disabled = false; }
+}
+
+async function removeReview(id) {
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
+  try {
+    Object.assign(recipe, await api(`/recipes/${encodeURIComponent(id)}/review`, { method: 'DELETE' }));
+    render();
+    refreshDialog();
+    showToast('Your rating was removed.');
+  } catch (error) { showToast(error.message); }
+}
+
 async function markMade(id) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
@@ -302,6 +480,7 @@ async function markMade(id) {
     const result = await api(`/recipes/${encodeURIComponent(id)}/made`, { method: 'POST' });
     recipe.madeCount = result.madeCount;
     recipe.madeByViewer = true;
+    if (!result.alreadyMade && result.maker) recipe.makers = [...(recipe.makers || []), result.maker];
     render();
     refreshDialog();
     showToast(result.alreadyMade ? 'Recipeboy already counted you!' : (result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`));
@@ -368,6 +547,20 @@ async function submitRecipe(event) {
 }
 
 async function handleAction(event) {
+  const ratingButton = event.target.closest('[data-rating]');
+  if (ratingButton) {
+    const form = ratingButton.closest('[data-review-form]');
+    const rating = Number(ratingButton.dataset.rating);
+    form.elements.rating.value = rating;
+    for (const button of form.querySelectorAll('[data-rating]')) {
+      const selected = Number(button.dataset.rating) <= rating;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', String(Number(button.dataset.rating) === rating));
+    }
+    return;
+  }
+  const removeReviewButton = event.target.closest('[data-remove-review]');
+  if (removeReviewButton) return removeReview(removeReviewButton.dataset.removeReview);
   const copyButton = event.target.closest('[data-copy]');
   if (copyButton) {
     const recipe = state.recipes.find((item) => item.id === copyButton.dataset.copy);
@@ -396,6 +589,7 @@ el.grid.addEventListener('keydown', (event) => {
   }
 });
 el.dialog.addEventListener('click', handleAction);
+el.dialog.addEventListener('submit', saveReview);
 document.getElementById('dialog-close').addEventListener('click', () => el.dialog.close());
 el.dialog.addEventListener('click', (event) => { if (event.target === el.dialog) el.dialog.close(); });
 el.dialog.addEventListener('close', () => {
@@ -410,6 +604,13 @@ el.tagFilters.addEventListener('click', (event) => {
   if (!button) return;
   state.tag = button.dataset.tag;
   render();
+});
+document.getElementById('profile-close').addEventListener('click', () => el.profileDialog.close());
+el.profileDialog.addEventListener('click', (event) => { if (event.target === el.profileDialog) el.profileDialog.close(); });
+el.profileDialog.addEventListener('change', (event) => { if (event.target.matches('input[type="radio"]')) refreshProfilePreview(); });
+el.profileDialog.addEventListener('submit', (event) => { if (event.target.id === 'profile-form') void saveProfile(event); });
+el.profileDialog.addEventListener('click', (event) => {
+  if (event.target.closest('#clerk-account-button')) authClient?.openAccount();
 });
 
 async function saveClippedRecipe() {
@@ -459,6 +660,7 @@ async function loadSharedBox() {
 function showSignedOut() {
   loadedUserId = '';
   state.recipes = [];
+  state.profile = null;
   if (el.dialog.open) el.dialog.close();
   el.appMain.hidden = true;
   el.authControls.hidden = true;
@@ -472,14 +674,21 @@ async function showSignedIn(user) {
   el.authGate.hidden = true;
   el.appMain.hidden = false;
   el.authControls.hidden = false;
-  el.accountInitial.textContent = user.initials;
   el.accountLabel.textContent = user.label;
-  el.account.title = user.email ? `Manage ${user.email}` : 'Manage account';
+  el.account.title = 'Customize your Recipeboy';
   el.bookmarkletDock.hidden = bookmarkletWasDismissed();
   if (loadedUserId === user.id) return;
   loadedUserId = user.id;
   state.recipes = [];
   el.count.textContent = 'Opening the shared box…';
+  try {
+    const result = await api('/profile/ensure', { method: 'POST', body: JSON.stringify({ displayName: user.label, avatar: AVATAR_DEFAULT }) });
+    state.profile = result.profile;
+    renderAccountProfile();
+  } catch {
+    state.profile = { displayName: user.label, avatar: AVATAR_DEFAULT };
+    renderAccountProfile();
+  }
   await loadSharedBox();
 }
 
@@ -490,7 +699,7 @@ async function handleAuthChange(user) {
 
 el.signIn.addEventListener('click', () => authClient?.signIn());
 el.signOut.addEventListener('click', () => authClient?.signOut());
-el.account.addEventListener('click', () => authClient?.openAccount());
+el.account.addEventListener('click', openProfile);
 window.addEventListener('hashchange', () => {
   const linkedRecipeId = recipeIdFromHash();
   if (linkedRecipeId) {

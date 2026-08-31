@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign as signBytes } from 'node:crypto';
-import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeAvatar, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
 
 function signedClerkToken(privateKey, overrides = {}) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -21,6 +21,15 @@ test('requires a signed-in account for recipe data', async () => {
   const response = await worker.fetch(new Request('https://recipeboy.test/recipes'), {});
   assert.equal(response.status, 401);
   assert.match((await response.json()).error, /sign in/i);
+});
+
+test('normalizes avatar choices to the supported Recipeboy palette', () => {
+  assert.deepEqual(normalizeAvatar({ background: 'mint', accessory: 'chef', badge: 'fire' }), {
+    background: 'mint', accessory: 'chef', badge: 'fire',
+  });
+  assert.deepEqual(normalizeAvatar({ background: '<script>', accessory: 'wings', badge: 'x' }), {
+    background: 'sunshine', accessory: 'none', badge: 'spoon',
+  });
 });
 
 test('verifies Clerk JWT signatures, issuer, and authorized frontend', async () => {

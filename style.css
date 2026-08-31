@@ -49,7 +49,7 @@ button { color: inherit; }
 .auth-controls { position: absolute; top: 14px; right: max(18px, calc((100vw - 1120px) / 2)); z-index: 6; display: flex; align-items: center; gap: 8px; }
 .account-button, .sign-out-button { min-height: 42px; border: 3px solid var(--navy); font-weight: 900; cursor: pointer; }
 .account-button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; color: var(--navy); background: var(--white); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); }
-.account-initial { display: grid; place-items: center; width: 28px; height: 28px; color: var(--white); background: var(--blue); border: 2px solid var(--navy); border-radius: 50%; }
+.account-avatar { display: block; width: 30px; height: 30px; }
 .sign-out-button { padding: 7px 11px; color: var(--white); background: var(--red); border-radius: 999px; }
 .account-button:hover, .sign-out-button:hover { transform: translateY(-1px); }
 
@@ -205,6 +205,10 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .pill { padding: 5px 9px; border: 2px solid var(--navy); border-radius: 999px; background: var(--cream); font-size: 12px; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .recipe-tag { color: var(--ink); font-weight: 800; line-height: 1.2; }
+.rating-summary { color: #9b4e00; }
+.card-makers { display: flex; align-items: center; gap: 9px; margin-top: 13px; color: #596885; font-size: 12px; font-weight: 900; }
+.avatar-stack { display: flex; padding-left: 7px; }
+.avatar-stack .recipeboy-avatar { margin-left: -7px; }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 4px solid var(--navy); }
 .card-actions button { min-height: 52px; border: 0; background: var(--yellow); font-weight: 900; cursor: pointer; }
 .card-actions button + button { border-left: 4px solid var(--navy); background: var(--red); color: var(--white); }
@@ -242,6 +246,70 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .steps li { position: relative; padding: 0 0 21px 45px; line-height: 1.5; }
 .steps li::before { counter-increment: steps; content: counter(steps); position: absolute; left: 0; top: -2px; display: grid; place-items: center; width: 30px; height: 30px; color: var(--white); background: var(--blue); border: 3px solid var(--navy); border-radius: 50%; font-weight: 900; }
 .source-link { color: var(--blue); }
+
+.recipeboy-avatar { position: relative; display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; overflow: visible; border: 3px solid var(--navy); border-radius: 50%; box-shadow: 2px 2px 0 rgba(16,42,90,.2); }
+.recipeboy-avatar img { display: block; width: 88%; height: 88%; object-fit: contain; }
+.avatar-sunshine { background: var(--yellow); }
+.avatar-tomato { background: #ff6975; }
+.avatar-blueberry { background: #72a9ff; }
+.avatar-mint { background: #9cdb88; }
+.avatar-accessory { position: absolute; top: -12%; left: -12%; z-index: 2; font-size: .55em; filter: drop-shadow(1px 1px 0 var(--white)); }
+.avatar-badge { position: absolute; right: -15%; bottom: -10%; z-index: 2; display: grid; place-items: center; min-width: 19px; height: 19px; padding: 0 3px; color: var(--red); background: var(--white); border: 2px solid var(--navy); border-radius: 50%; font-size: 10px; line-height: 1; }
+.avatar-tiny { width: 29px; height: 29px; border-width: 2px; box-shadow: none; }
+.avatar-tiny .avatar-badge { display: none; }
+.avatar-small { width: 42px; height: 42px; }
+.avatar-large { width: 150px; height: 150px; border-width: 5px; box-shadow: 6px 6px 0 var(--navy); }
+.avatar-large .avatar-badge { right: -6%; bottom: -5%; min-width: 36px; height: 36px; font-size: 19px; border-width: 3px; }
+.avatar-account { width: 30px; height: 30px; border-width: 0; box-shadow: none; }
+.avatar-account .avatar-badge { right: -8px; bottom: -5px; min-width: 14px; height: 14px; padding: 0 2px; border-width: 1px; font-size: 8px; }
+
+.recipe-social { padding: 28px 30px 36px; background: #f7f3e8; border-top: 5px solid var(--navy); }
+.social-summary { display: grid; grid-template-columns: minmax(180px,.7fr) minmax(300px,1.3fr); gap: 30px; align-items: start; }
+.social-eyebrow { color: var(--red); font-size: 11px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.social-summary h3 { margin-top: 5px; font-size: 23px; }
+.social-summary p { margin: 4px 0 0; color: #64708a; }
+.social-summary .big-stars { color: var(--red); font-size: 27px; letter-spacing: 2px; }
+.review-form { display: block; padding: 17px; background: var(--white); border: 4px solid var(--navy); border-radius: 18px; box-shadow: 4px 4px 0 var(--yellow); }
+.review-form fieldset, .profile-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.review-form legend, .review-form > label, .profile-form legend, .profile-name { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.review-form > label { margin-top: 12px; }
+.review-form > label span { color: #7b8499; font-weight: 700; }
+.review-form textarea { height: 88px; min-height: 88px; padding: 10px 12px; border-width: 3px; border-radius: 12px; }
+.star-picker { display: flex; gap: 3px; }
+.star-choice { padding: 0 2px; color: #cbc4ad; background: transparent; border: 0; font-size: 31px; line-height: 1; cursor: pointer; transition: color 140ms ease, transform 140ms cubic-bezier(.23,1,.32,1); }
+.star-choice.selected { color: var(--red); }
+.star-choice:active { transform: scale(.9); }
+.review-form-actions, .profile-actions { display: flex; align-items: center; gap: 14px; margin-top: 13px; }
+.review-form-actions .primary-button { width: auto; min-width: 140px; padding: 8px 15px; }
+.text-button { padding: 7px 3px; color: var(--blue); background: transparent; border: 0; font-weight: 900; text-decoration: underline; cursor: pointer; }
+.friend-columns { display: grid; grid-template-columns: .8fr 1.2fr; gap: 30px; margin-top: 30px; }
+.friend-columns h3 { margin-bottom: 12px; font-size: 18px; }
+.friend-columns p { margin: 0; color: #64708a; }
+.maker-list { display: flex; flex-wrap: wrap; gap: 9px; }
+.maker-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 5px; background: var(--white); border: 2px solid var(--navy); border-radius: 999px; font-size: 13px; font-weight: 900; }
+.review-list { display: grid; gap: 10px; }
+.friend-review { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 12px; background: var(--white); border: 3px solid var(--navy); border-radius: 14px; }
+.review-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 7px; }
+.review-heading span { color: var(--red); letter-spacing: 1px; }
+.friend-review p { margin-top: 5px; color: var(--ink); white-space: pre-wrap; }
+
+.profile-dialog { width: min(720px, calc(100% - 28px)); }
+.profile-shell { box-shadow: 10px 10px 0 var(--blue); }
+.profile-hero { display: flex; align-items: center; gap: 26px; padding: 30px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
+.profile-hero h2 { margin-top: 4px; font-size: clamp(30px,5vw,48px); line-height: 1; }
+.profile-hero p { max-width: 400px; margin-bottom: 0; }
+.profile-form { display: block; padding: 24px 30px 30px; }
+.profile-name input { display: block; width: 100%; margin-top: 7px; padding: 10px 13px; color: var(--ink); background: var(--white); border: 3px solid var(--navy); border-radius: 12px; outline: none; text-transform: none; }
+.profile-form fieldset { margin-top: 20px; }
+.avatar-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-option { position: relative; display: grid; place-items: center; gap: 3px; min-width: 82px; min-height: 68px; padding: 8px; background: var(--white); border: 3px solid #c5c0af; border-radius: 13px; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1), border-color 140ms ease, box-shadow 140ms ease; }
+.avatar-option:has(input:checked) { border-color: var(--navy); box-shadow: 3px 3px 0 var(--navy); transform: translate(-1px,-1px); }
+.avatar-option input { position: absolute; opacity: 0; pointer-events: none; }
+.avatar-option strong { font-size: 11px; }
+.color-option > span { width: 30px; height: 30px; border: 2px solid var(--navy); border-radius: 50%; }
+.option-emoji { height: 32px; font-size: 25px; line-height: 32px; }
+.profile-actions { justify-content: space-between; margin-top: 25px; }
+.profile-actions .primary-button { width: auto; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; z-index: 20; transform: translate(-50%, 120px); padding: 12px 18px; color: var(--white); background: var(--navy); border: 3px solid var(--white); border-radius: 999px; box-shadow: 4px 4px 0 var(--red); opacity: 0; transition: .2s; }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
@@ -296,6 +364,18 @@ footer { height: 12px; background: var(--navy); }
   .recipe-card { min-height: 285px; }
   .empty-state { flex-direction: column; text-align: center; }
   .detail-hero, .detail-actions, .recipe-columns { padding-left: 20px; padding-right: 20px; }
+  .recipe-social { padding-left: 20px; padding-right: 20px; }
+  .social-summary, .friend-columns { grid-template-columns: 1fr; }
+  .profile-hero { align-items: flex-start; flex-direction: column; padding: 24px 20px; }
+  .avatar-large { width: 115px; height: 115px; }
+  .profile-form { padding: 20px; }
+  .profile-actions { align-items: stretch; flex-direction: column; }
+  .profile-actions .primary-button { width: 100%; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .star-choice:hover { color: var(--red); transform: translateY(-2px); }
+  .avatar-option:hover { border-color: var(--navy); }
 }
 
 @media (prefers-reduced-motion: reduce) {
