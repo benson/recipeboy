@@ -1,4 +1,4 @@
-import { initAuth } from './auth.js?v=1';
+import { initAuth } from './auth.js?v=2';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'

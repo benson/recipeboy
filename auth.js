@@ -74,6 +74,14 @@ export async function initAuth({ onChange = () => {} } = {}) {
   await clerk.load({
     publishableKey,
     ui: { ClerkUI: window.__internal_ClerkUICtor },
+    localization: {
+      signIn: {
+        start: {
+          title: 'Sign in to Recipeboy',
+          titleCombined: 'Continue to Recipeboy',
+        },
+      },
+    },
     appearance: {
       variables: {
         colorPrimary: '#195ccb',
