@@ -35,6 +35,7 @@ const el = {
   account: document.getElementById('account-button'),
   accountAvatar: document.getElementById('account-avatar'),
   accountLabel: document.getElementById('account-label'),
+  floatingRecipeboy: document.getElementById('floating-recipeboy'),
 };
 
 let authClient = null;
@@ -482,6 +483,7 @@ function renderAccountProfile() {
   if (!state.profile) return;
   el.accountAvatar.innerHTML = avatarTemplate(state.profile, 'avatar-account');
   el.accountLabel.textContent = state.profile.displayName;
+  el.floatingRecipeboy.innerHTML = avatarTemplate(state.profile, 'avatar-floating');
 }
 
 function openProfile() {
@@ -762,6 +764,7 @@ function showSignedOut() {
   state.recipes = [];
   state.lists = [];
   state.profile = null;
+  el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
   if (el.dialog.open) el.dialog.close();
   el.appMain.hidden = true;
   el.authControls.hidden = true;
