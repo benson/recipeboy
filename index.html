@@ -28,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -38,7 +38,7 @@
         <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
         <span id="account-label">Friend</span>
       </button>
-      <button id="sign-out-button" class="sign-out-button" type="button">Sign out</button>
+      <button id="stats-button" class="stats-button" type="button">Friend stats</button>
     </div>
     <div class="hero-copy">
       <h1>RECIPE<span>BOY!</span></h1>
@@ -71,7 +71,6 @@
         <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link… or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
         <div class="form-footer">
           <span id="input-hint">Recipeboy cleans it up and saves it.</span>
-          <label class="feed-photo-button"><input id="recipe-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple><span id="recipe-photo-label">Add photos</span></label>
           <button class="primary-button" type="submit">
             <span>Normalize it!</span>
             <span aria-hidden="true">→</span>
@@ -88,7 +87,6 @@
             <h2 id="collection-title">The good stuff</h2>
             <p id="recipe-count">Loading the recipe box…</p>
           </div>
-          <button id="stats-button" class="stats-button" type="button">Friend stats</button>
         </div>
         <div class="collection-tools">
           <label class="list-filter-wrap">
@@ -174,6 +172,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=20"></script>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>

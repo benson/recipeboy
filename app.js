@@ -33,13 +33,10 @@ const el = {
   authMessage: document.getElementById('auth-message'),
   authControls: document.getElementById('auth-controls'),
   signIn: document.getElementById('sign-in-button'),
-  signOut: document.getElementById('sign-out-button'),
   account: document.getElementById('account-button'),
   accountAvatar: document.getElementById('account-avatar'),
   accountLabel: document.getElementById('account-label'),
   floatingRecipeboy: document.getElementById('floating-recipeboy'),
-  recipePhotos: document.getElementById('recipe-photos'),
-  recipePhotoLabel: document.getElementById('recipe-photo-label'),
   statsButton: document.getElementById('stats-button'),
   statsDialog: document.getElementById('stats-dialog'),
   statsContent: document.getElementById('stats-content'),
@@ -511,8 +508,11 @@ function socialTemplate(recipe) {
         </fieldset>
         <label for="review-${esc(recipe.id)}">A note for your friends <span>optional</span></label>
         <textarea id="review-${esc(recipe.id)}" name="review" rows="3" maxlength="1000" placeholder="Worth doubling? Better with extra garlic?">${esc(recipe.viewerReview || '')}</textarea>
+        <label for="review-photos-${esc(recipe.id)}">Photos from your cook <span>optional</span></label>
+        <input class="review-photo-input" id="review-photos-${esc(recipe.id)}" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+        <p class="review-cook-note">${recipe.madeByViewer ? 'You’re already in the cooked-by crew.' : 'Saving this review also records that you cooked it.'}</p>
         <div class="review-form-actions">
-          <button class="primary-button" type="submit">${selectedRating ? 'Update rating' : 'Save rating'}</button>
+          <button class="primary-button" type="submit">${selectedRating ? 'Update cook review' : 'Save cook review'}</button>
           ${selectedRating ? `<button class="text-button" type="button" data-remove-review="${esc(recipe.id)}">Remove mine</button>` : ''}
         </div>
       </form>
@@ -568,7 +568,7 @@ function detailTemplate(recipe) {
       <section><h3>What to do</h3><ol class="steps">${steps || '<li>Instructions weren’t listed.</li>'}</ol></section>
     </div>
     <section class="recipe-photos" aria-label="Cooking photos">
-      <div class="recipe-photos-heading"><div><span class="social-eyebrow">From the kitchen</span><h3>Cooking photos</h3></div><label class="photo-add-button"><input type="file" accept="image/jpeg,image/png,image/webp" multiple data-photo-add="${esc(recipe.id)}"><span>Add photos</span></label></div>
+      <div class="recipe-photos-heading"><div><span class="social-eyebrow">From the kitchen</span><h3>Cooking photos</h3></div></div>
       ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption><button type="button" data-delete-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Remove this photo">×</button></figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
     </section>
     ${socialTemplate(recipe)}`;
@@ -678,7 +678,7 @@ function profileTemplate(profile) {
       <fieldset><legend>Backdrop</legend><div class="avatar-options color-options">${backgrounds.map(([value, label, color]) => `<label class="avatar-option color-option" style="--swatch:${color}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span class="color-swatch" aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
       <fieldset><legend>Choose your Recipeboy</legend><div class="avatar-options character-options">${Object.entries(AVATAR_CHARACTERS).map(([value, option]) => `<label class="avatar-option character-option character-${value}"><input type="radio" name="character" value="${value}" ${avatar.character === value ? 'checked' : ''}><span class="option-art character-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
       <fieldset><legend>Favorite flavor</legend><div class="avatar-options flavor-options">${Object.entries(AVATAR_FLAVORS).map(([value, option]) => `<label class="avatar-option flavor-option"><input type="radio" name="flavor" value="${value}" ${avatar.flavor === value ? 'checked' : ''}><span class="option-art flavor-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
-      <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button></div>
+      <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><span class="profile-account-links"><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button><button class="text-button profile-sign-out" type="button" data-profile-sign-out>Sign out</button></span></div>
     </form>`;
 }
 
@@ -743,14 +743,27 @@ async function saveReview(event) {
   const recipe = state.recipes.find((item) => item.id === id);
   const data = new FormData(form);
   const rating = Number(data.get('rating'));
+  const photos = [...(form.elements.photos?.files || [])];
   if (!rating) return showToast('Tap a star first!');
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   try {
     Object.assign(recipe, await api(`/recipes/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify({ rating, review: data.get('review') }) }));
+    if (!recipe.madeByViewer) {
+      const madeResult = await api(`/recipes/${encodeURIComponent(id)}/made`, { method: 'POST' });
+      recipe.madeCount = madeResult.madeCount;
+      recipe.madeByViewer = true;
+      if (!madeResult.alreadyMade && madeResult.maker) recipe.makers = [...(recipe.makers || []), madeResult.maker];
+    }
+    let photoWarning = '';
+    if (photos.length) {
+      button.textContent = 'Framing your photos…';
+      try { await uploadRecipePhotos(recipe, photos); }
+      catch (error) { photoWarning = ` Review saved, but a photo failed: ${error.message}`; }
+    }
     render();
     refreshDialog();
-    showToast(recipe.viewerReview ? 'Tasting note saved!' : 'Rating saved!');
+    showToast(photoWarning || (photos.length ? 'Cook, review, and photos saved!' : 'Cook review saved!'));
   } catch (error) { showToast(error.message); }
   finally { button.disabled = false; }
 }
@@ -778,19 +791,6 @@ async function markMade(id) {
     refreshDialog();
     showToast(result.alreadyMade ? 'Recipeboy already counted this cook!' : (result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`));
   } catch (error) { showToast(error.message); }
-}
-
-async function addPhotos(id, files, input = null) {
-  const recipe = state.recipes.find((item) => item.id === id);
-  if (!recipe || !files?.length) return;
-  if (input) input.disabled = true;
-  try {
-    const uploaded = await uploadRecipePhotos(recipe, files);
-    render();
-    refreshDialog();
-    showToast(`${uploaded.length} photo${uploaded.length === 1 ? '' : 's'} added!`);
-  } catch (error) { showToast(error.message); }
-  finally { if (input) input.disabled = false; }
 }
 
 async function deletePhoto(recipeId, photoId) {
@@ -842,23 +842,14 @@ async function submitRecipe(event) {
   const input = el.input.value.trim();
   if (!input) return;
   const button = el.form.querySelector('button[type="submit"]');
-  const photos = [...(el.recipePhotos?.files || [])];
   button.disabled = true;
   button.querySelector('span').textContent = /^https?:\/\//i.test(input) ? 'Reading that page…' : 'Tidying your notes…';
   el.status.hidden = true;
   try {
     const result = await normalizeInput(input, button);
     state.recipes.unshift(result.recipe);
-    let photoWarning = '';
-    if (photos.length) {
-      button.querySelector('span').textContent = 'Framing your photos…';
-      try { await uploadRecipePhotos(result.recipe, photos); }
-      catch (error) { photoWarning = ` The recipe is safe, but a photo failed: ${error.message}`; }
-    }
     el.input.value = '';
-    if (el.recipePhotos) el.recipePhotos.value = '';
-    if (el.recipePhotoLabel) el.recipePhotoLabel.textContent = 'Add photos';
-    el.status.textContent = `Saved “${result.recipe.title}” to the shared box.${photoWarning}`;
+    el.status.textContent = `Saved “${result.recipe.title}” to the shared box.`;
     el.status.className = 'form-status success';
     el.status.hidden = false;
     render();
@@ -949,10 +940,6 @@ el.grid.addEventListener('keydown', (event) => {
 });
 el.dialog.addEventListener('click', handleAction);
 el.dialog.addEventListener('submit', saveReview);
-el.dialog.addEventListener('change', (event) => {
-  const input = event.target.closest('[data-photo-add]');
-  if (input?.files?.length) void addPhotos(input.dataset.photoAdd, input.files, input);
-});
 document.getElementById('dialog-close').addEventListener('click', () => el.dialog.close());
 el.dialog.addEventListener('click', (event) => { if (event.target === el.dialog) el.dialog.close(); });
 el.dialog.addEventListener('close', () => {
@@ -976,6 +963,10 @@ el.profileDialog.addEventListener('change', (event) => { if (event.target.matche
 el.profileDialog.addEventListener('submit', (event) => { if (event.target.id === 'profile-form') void saveProfile(event); });
 el.profileDialog.addEventListener('click', (event) => {
   if (event.target.closest('#clerk-account-button')) authClient?.openAccount();
+  if (event.target.closest('[data-profile-sign-out]')) {
+    el.profileDialog.close();
+    authClient?.signOut();
+  }
 });
 document.getElementById('edit-close').addEventListener('click', () => el.editDialog.close());
 el.editDialog.addEventListener('click', (event) => {
@@ -992,10 +983,6 @@ el.listDialog.addEventListener('change', (event) => {
 });
 el.listDialog.addEventListener('submit', (event) => { if (event.target.id === 'new-list-form') void createList(event); });
 el.listDialog.addEventListener('close', () => { state.listRecipeId = null; });
-el.recipePhotos?.addEventListener('change', () => {
-  const count = el.recipePhotos.files.length;
-  el.recipePhotoLabel.textContent = count ? `${count} photo${count === 1 ? '' : 's'} ready` : 'Add photos';
-});
 el.statsButton?.addEventListener('click', () => { void openStats(); });
 document.getElementById('stats-close')?.addEventListener('click', () => el.statsDialog.close());
 el.statsDialog?.addEventListener('click', (event) => { if (event.target === el.statsDialog) el.statsDialog.close(); });
@@ -1090,7 +1077,6 @@ async function handleAuthChange(user) {
 }
 
 el.signIn.addEventListener('click', () => authClient?.signIn());
-el.signOut.addEventListener('click', () => authClient?.signOut());
 el.account.addEventListener('click', openProfile);
 window.addEventListener('hashchange', () => {
   const linkedRecipeId = recipeIdFromHash();
