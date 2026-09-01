@@ -230,7 +230,7 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .card-contributor small, .card-makers small { color: #7c8496; font-size: 9px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
 .card-contributor strong, .card-makers strong { margin-top: 2px; color: var(--navy); font-size: 11px; }
 .card-makers { margin-top: 8px; }
-.card-makers.empty { padding-left: 2px; }
+.card-makers.empty .avatar-stack { flex: 0 0 29px; padding-left: 0; }
 .avatar-stack { display: flex; padding-left: 7px; }
 .avatar-stack .recipeboy-avatar { margin-left: -7px; }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 4px solid var(--navy); }
