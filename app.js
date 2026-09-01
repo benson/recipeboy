@@ -80,7 +80,7 @@ function avatarTemplate(profile = {}, extraClass = '') {
   const avatar = normalizedClientAvatar(profile.avatar || {});
   const character = AVATAR_CHARACTERS[avatar.character] || AVATAR_CHARACTERS.classic;
   const flavor = AVATAR_FLAVORS[avatar.flavor] || AVATAR_FLAVORS.savory;
-  return `<span class="recipeboy-avatar avatar-${esc(avatar.background)} ${esc(extraClass)}">
+  return `<span class="recipeboy-avatar avatar-${esc(avatar.background)} character-${esc(avatar.character)} ${esc(extraClass)}">
     <img class="avatar-character" src="${esc(character.image)}" alt="">
     <span class="avatar-flavor" aria-hidden="true"><img src="${esc(flavor.image)}" alt=""></span>
   </span>`;
@@ -473,7 +473,7 @@ function profileTemplate(profile) {
     <form id="profile-form" class="profile-form">
       <label class="profile-name">Display name<input name="displayName" maxlength="32" required value="${esc(profile.displayName || '')}"></label>
       <fieldset><legend>Backdrop</legend><div class="avatar-options color-options">${backgrounds.map(([value, label, color]) => `<label class="avatar-option color-option" style="--swatch:${color}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span class="color-swatch" aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
-      <fieldset><legend>Choose your Recipeboy</legend><div class="avatar-options character-options">${Object.entries(AVATAR_CHARACTERS).map(([value, option]) => `<label class="avatar-option character-option"><input type="radio" name="character" value="${value}" ${avatar.character === value ? 'checked' : ''}><span class="option-art character-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
+      <fieldset><legend>Choose your Recipeboy</legend><div class="avatar-options character-options">${Object.entries(AVATAR_CHARACTERS).map(([value, option]) => `<label class="avatar-option character-option character-${value}"><input type="radio" name="character" value="${value}" ${avatar.character === value ? 'checked' : ''}><span class="option-art character-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
       <fieldset><legend>Favorite flavor</legend><div class="avatar-options flavor-options">${Object.entries(AVATAR_FLAVORS).map(([value, option]) => `<label class="avatar-option flavor-option"><input type="radio" name="flavor" value="${value}" ${avatar.flavor === value ? 'checked' : ''}><span class="option-art flavor-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
       <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button></div>
     </form>`;

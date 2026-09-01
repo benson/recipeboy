@@ -253,6 +253,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 
 .recipeboy-avatar { position: relative; display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; overflow: visible; border: 3px solid var(--navy); border-radius: 50%; box-shadow: 2px 2px 0 rgba(16,42,90,.2); }
 .recipeboy-avatar > .avatar-character { display: block; width: 92%; height: 92%; object-fit: contain; }
+.recipeboy-avatar.character-scallion > .avatar-character { width: 77%; height: 77%; }
 .avatar-sunshine { background: var(--yellow); }
 .avatar-tomato { background: #ff6975; }
 .avatar-blueberry { background: #72a9ff; }
@@ -319,6 +320,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .character-option { min-height: 126px; }
 .option-art { display: grid; place-items: center; width: 68px; height: 74px; }
 .option-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.character-option.character-scallion .character-art img { width: 78%; height: 78%; }
 .flavor-options { grid-template-columns: repeat(6, minmax(82px, 1fr)); }
 .flavor-option { min-height: 100px; }
 .flavor-art { width: 52px; height: 54px; }
