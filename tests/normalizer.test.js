@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign as signBytes } from 'node:crypto';
-import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeAvatar, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, friendActivity, normalizeAvatar, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
 
 function signedClerkToken(privateKey, overrides = {}) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -56,6 +56,25 @@ test('normalizes avatar choices to the supported Recipeboy palette', () => {
   assert.deepEqual(normalizeAvatar({ background: 'bubblegum', character: 'mushroom', flavor: 'citrusy' }), {
     background: 'bubblegum', character: 'mushroom', flavor: 'citrusy',
   });
+});
+
+test('builds a safe chronological activity feed from additions, cooks, and ratings', async () => {
+  const rows = [
+    { activity_type: 'rated', recipe_id: 'pie-1', recipe_title: 'Apple <b>Pie</b>', user_id: 'viewer', display_name: 'Benson', avatar_json: '{"background":"mint","character":"basil","flavor":"umami"}', occurred_at: '2026-09-01T12:00:00.000Z', rating: 5 },
+    { activity_type: 'cooked', recipe_id: 'soup-1', recipe_title: 'Tomato Soup', user_id: 'friend', display_name: 'Rogromi', avatar_json: '{}', occurred_at: '2026-09-01T11:00:00.000Z', rating: null },
+    { activity_type: 'added', recipe_id: 'rice-1', recipe_title: 'Garlic Rice', user_id: 'friend', display_name: 'Rogromi', avatar_json: '{}', occurred_at: '2026-09-01T10:00:00.000Z', rating: null },
+  ];
+  const env = { DB: { prepare(sql) {
+    assert.match(sql, /UNION ALL/);
+    return { all: async () => ({ results: rows }) };
+  } } };
+  const activity = await friendActivity(env, 'viewer');
+  assert.deepEqual(activity.map((item) => item.type), ['rated', 'cooked', 'added']);
+  assert.equal(activity[0].recipeTitle, 'Apple Pie');
+  assert.equal(activity[0].rating, 5);
+  assert.equal(activity[0].actor.isViewer, true);
+  assert.equal(activity[1].actor.displayName, 'Rogromi');
+  assert.equal(activity[1].actor.isViewer, false);
 });
 
 test('verifies Clerk JWT signatures, issuer, and authorized frontend', async () => {

@@ -1250,6 +1250,41 @@ async function friendStats(env, userId) {
   };
 }
 
+async function friendActivity(env, userId) {
+  const { results } = await env.DB.prepare(`
+    SELECT * FROM (
+      SELECT 'added' AS activity_type, r.id AS recipe_id, r.title AS recipe_title,
+        r.created_by_user_id AS user_id, p.display_name, p.avatar_json,
+        r.created_at AS occurred_at, NULL AS rating
+      FROM recipes r
+      LEFT JOIN user_profiles p ON p.user_id = r.created_by_user_id
+      WHERE r.deleted_at IS NULL
+      UNION ALL
+      SELECT 'cooked' AS activity_type, r.id AS recipe_id, r.title AS recipe_title,
+        m.user_id, p.display_name, p.avatar_json, m.created_at AS occurred_at, NULL AS rating
+      FROM recipe_makes m
+      JOIN recipes r ON r.id = m.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = m.user_id
+      UNION ALL
+      SELECT 'rated' AS activity_type, r.id AS recipe_id, r.title AS recipe_title,
+        rr.user_id, p.display_name, p.avatar_json, rr.updated_at AS occurred_at, rr.rating
+      FROM recipe_reviews rr
+      JOIN recipes r ON r.id = rr.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = rr.user_id
+    ) activity
+    ORDER BY occurred_at DESC
+    LIMIT 60
+  `).all();
+  return (results || []).map((row) => ({
+    type: row.activity_type,
+    recipeId: row.recipe_id,
+    recipeTitle: cleanText(row.recipe_title, 180) || 'Untitled recipe',
+    occurredAt: row.occurred_at,
+    rating: row.rating == null ? null : Number(row.rating),
+    actor: { ...profileFromRow(row), isViewer: row.user_id === userId },
+  }));
+}
+
 async function rateLimit(request, limiter, message) {
   if (!limiter?.limit) return null;
   const key = request.headers.get('cf-connecting-ip') || 'local';
@@ -1280,6 +1315,7 @@ export default {
       }
       if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env, auth.userId) });
       if (request.method === 'GET' && path === '/stats') return json({ stats: await friendStats(env, auth.userId) });
+      if (request.method === 'GET' && path === '/activity') return json({ activity: await friendActivity(env, auth.userId) });
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
         return limited || createRecipe(request, env, auth.userId);
@@ -1349,4 +1385,4 @@ export default {
   },
 };
 
-export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeAvatar, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt };
+export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, friendActivity, normalizeAvatar, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt };

@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], lists: [], profile: null, stats: null, isSignedIn: false, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
+const state = { recipes: [], lists: [], profile: null, stats: null, activity: null, isSignedIn: false, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -42,6 +42,9 @@ const el = {
   statsButton: document.getElementById('stats-button'),
   statsDialog: document.getElementById('stats-dialog'),
   statsContent: document.getElementById('stats-content'),
+  feedButton: document.getElementById('feed-button'),
+  feedDialog: document.getElementById('feed-dialog'),
+  feedContent: document.getElementById('feed-content'),
 };
 
 let authClient = null;
@@ -1002,6 +1005,54 @@ async function openStats() {
   }
 }
 
+function relativeActivityTime(value) {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return '';
+  const elapsed = Math.max(0, Date.now() - time);
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days}d ago`;
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(time));
+}
+
+function activityCopy(item) {
+  if (item.type === 'cooked') return 'cooked';
+  if (item.type === 'rated') return 'rated';
+  return 'added';
+}
+
+function activityBadge(item) {
+  if (item.type === 'cooked') return 'Cooked';
+  if (item.type === 'rated') return `★ ${Number(item.rating) || 0}`;
+  return 'New';
+}
+
+function feedTemplate(activity) {
+  return `<div class="feed-hero"><span class="social-eyebrow">Fresh from the shared kitchen</span><h2>Feed</h2><p>The latest recipe victories from your friends.</p></div>
+    <div class="feed-body">${activity.length ? `<ol class="activity-feed">${activity.map((item) => `<li class="activity-item activity-${esc(item.type)}">
+      ${avatarTemplate(item.actor, 'activity-avatar')}
+      <div class="activity-copy"><p><strong>${esc(item.actor?.displayName || 'Recipe friend')}</strong> ${activityCopy(item)} <button type="button" data-feed-recipe="${esc(item.recipeId)}">${esc(item.recipeTitle)}</button></p><time datetime="${esc(item.occurredAt)}">${esc(relativeActivityTime(item.occurredAt))}</time></div>
+      <span class="activity-badge">${esc(activityBadge(item))}</span>
+    </li>`).join('')}</ol>` : '<div class="feed-empty"><strong>The kitchen is quiet.</strong><span>Add, cook, or rate a recipe and it’ll show up here.</span></div>'}</div>`;
+}
+
+async function openFeed() {
+  el.feedContent.innerHTML = '<div class="feed-loading">Recipeboy is checking the kitchen…</div>';
+  el.feedDialog.showModal();
+  try {
+    const result = await api('/activity');
+    state.activity = result.activity || [];
+    el.feedContent.innerHTML = feedTemplate(state.activity);
+  } catch (error) {
+    el.feedContent.innerHTML = `<div class="feed-loading">${esc(error.message)}</div>`;
+  }
+}
+
 async function handleAction(event) {
   if (event.target.closest('[data-sign-in]')) {
     await authClient?.signIn();
@@ -1164,6 +1215,16 @@ el.listDialog.addEventListener('close', () => { state.listRecipeId = null; state
 el.statsButton?.addEventListener('click', () => { void openStats(); });
 document.getElementById('stats-close')?.addEventListener('click', () => el.statsDialog.close());
 el.statsDialog?.addEventListener('click', (event) => { if (event.target === el.statsDialog) el.statsDialog.close(); });
+el.feedButton?.addEventListener('click', () => { void openFeed(); });
+document.getElementById('feed-close')?.addEventListener('click', () => el.feedDialog.close());
+el.feedDialog?.addEventListener('click', (event) => {
+  if (event.target === el.feedDialog) el.feedDialog.close();
+  const recipeButton = event.target.closest('[data-feed-recipe]');
+  if (recipeButton) {
+    el.feedDialog.close();
+    openRecipe(recipeButton.dataset.feedRecipe);
+  }
+});
 
 async function saveClippedRecipe() {
   const clippedRecipe = bookmarkletPayload();
@@ -1225,6 +1286,7 @@ async function showSignedOut() {
   state.recipes = [];
   state.lists = [];
   state.profile = null;
+  state.activity = null;
   prepareAppLoading();
   document.body.classList.add('view-only');
   el.appMain.hidden = false;
@@ -1236,6 +1298,7 @@ async function showSignedOut() {
   if (el.dialog.open) el.dialog.close();
   if (el.editDialog.open) el.editDialog.close();
   if (el.statsDialog.open) el.statsDialog.close();
+  if (el.feedDialog.open) el.feedDialog.close();
   el.authControls.hidden = true;
   el.publicControls.hidden = false;
   el.bookmarkletDock.hidden = true;

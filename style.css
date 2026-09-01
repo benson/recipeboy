@@ -53,10 +53,10 @@ button { color: inherit; }
 .public-controls { padding: 4px 5px 4px 11px; color: var(--navy); background: var(--white); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
 .public-controls button { min-height: 30px; padding: 4px 12px; color: var(--white); background: var(--blue); border: 0; border-radius: 999px; font-weight: 900; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
 .public-controls button:active { transform: scale(.96); }
-.account-button, .stats-button { min-height: 42px; border: 3px solid var(--navy); font-weight: 900; cursor: pointer; }
+.account-button, .stats-button, .feed-button { min-height: 42px; border: 3px solid var(--navy); font-weight: 900; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
 .account-button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; color: var(--navy); background: var(--white); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); }
 .account-avatar { display: block; width: 30px; height: 30px; }
-.account-button:hover, .stats-button:hover { transform: translateY(-1px); }
+.account-button:active, .stats-button:active, .feed-button:active { transform: scale(.97); }
 
 .hero::after {
   content: "";
@@ -111,7 +111,8 @@ main { width: min(1120px, calc(100% - 36px)); margin: 20px auto 72px; }
 .feeder-heading, .collection-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 .feeder-heading { padding: 13px 20px; background: var(--red); color: var(--white); border-bottom: 4px solid var(--navy); }
 .collection-title-wrap { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; gap: 15px; }
-.stats-button { flex: none; padding: 8px 12px; color: var(--navy); background: var(--yellow); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--red); font-size: 12px; font-weight: 900; cursor: pointer; }
+.stats-button, .feed-button { flex: none; padding: 8px 12px; color: var(--navy); background: var(--yellow); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--red); font-size: 12px; font-weight: 900; cursor: pointer; }
+.feed-button { color: var(--white); background: var(--blue); box-shadow-color: var(--navy); }
 .feeder-heading p { margin: 0; text-align: right; }
 
 form { display: grid; grid-template-columns: minmax(0, 1fr) 190px; align-items: center; gap: 15px; padding: 13px 20px 15px; }
@@ -502,6 +503,32 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .leader-score small { color: #6b768c; font-family: 'Nunito', sans-serif; font-size: 8px; letter-spacing: .04em; text-transform: uppercase; }
 .leaderboard .leaderboard-empty { display: block; padding: 18px 10px; color: #627089; text-align: center; }
 
+.feed-dialog { width: min(720px, calc(100% - 28px)); }
+.feed-shell { width: 100%; overflow-x: hidden; box-shadow: 10px 10px 0 var(--blue); }
+.feed-shell > .close-button { position: absolute; top: 14px; right: 14px; float: none; margin: 0; }
+.feed-hero { padding: 28px 84px 24px 30px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
+.feed-hero h2 { margin-top: 4px; font-size: clamp(38px, 7vw, 56px); line-height: .95; }
+.feed-hero p { margin: 8px 0 0; color: #53617c; font-weight: 800; }
+.feed-body { padding: 18px 22px 24px; }
+.feed-loading { padding: 70px 30px; font-size: 20px; font-weight: 900; text-align: center; }
+.activity-feed { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.activity-item { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 11px 12px; background: var(--white); border: 3px solid var(--navy); border-radius: 15px; box-shadow: 3px 3px 0 #d8d1bd; }
+.activity-item::before { content: ""; position: absolute; top: 9px; bottom: 9px; left: -3px; width: 7px; background: var(--yellow); border: 2px solid var(--navy); border-left: 0; border-radius: 0 5px 5px 0; }
+.activity-cooked::before { background: var(--red); }
+.activity-rated::before { background: var(--blue); }
+.activity-avatar { width: 48px; height: 48px; border-width: 2px; box-shadow: 2px 2px 0 var(--navy); }
+.activity-avatar .avatar-flavor { width: 18px; height: 18px; padding: 2px; }
+.activity-copy { min-width: 0; }
+.activity-copy p { margin: 0; font-size: 14px; line-height: 1.35; }
+.activity-copy p strong { font-weight: 900; }
+.activity-copy button { max-width: 100%; padding: 0; overflow: hidden; color: var(--blue); background: none; border: 0; font: inherit; font-weight: 900; text-align: left; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; text-overflow: ellipsis; vertical-align: bottom; white-space: nowrap; cursor: pointer; }
+.activity-copy time { display: block; margin-top: 3px; color: #6b768c; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.activity-badge { align-self: center; min-width: 54px; padding: 5px 8px; color: var(--navy); background: var(--yellow); border: 2px solid var(--navy); border-radius: 999px; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-align: center; text-transform: uppercase; white-space: nowrap; }
+.activity-cooked .activity-badge { color: var(--white); background: var(--red); }
+.activity-rated .activity-badge { color: var(--white); background: var(--blue); }
+.feed-empty { display: grid; gap: 5px; padding: 45px 20px; color: #647087; text-align: center; }
+.feed-empty strong { color: var(--navy); font: 24px "Archivo Black", sans-serif; text-transform: uppercase; }
+
 .dialog-shell { scrollbar-width: none; -ms-overflow-style: none; }
 .dialog-shell::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
@@ -537,7 +564,7 @@ footer { height: 12px; background: var(--navy); }
   .auth-controls, .public-controls { top: 10px; right: 9px; gap: 5px; }
   .account-button { min-height: 38px; padding-right: 6px; }
   .account-button #account-label { display: none; }
-  .stats-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
+  .stats-button, .feed-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
   .auth-gate img { width: 120px; }
   .auth-gate .primary-button { width: 100%; }
@@ -593,9 +620,15 @@ footer { height: 12px; background: var(--navy); }
   .edit-actions { align-items: stretch; flex-direction: column; }
   .edit-actions .primary-button { width: 100%; }
   .stats-grid { grid-template-columns: 1fr; padding: 20px; }
+  .feed-body { padding: 14px; }
+  .activity-item { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 9px; padding: 9px 9px; }
+  .activity-avatar { width: 42px; height: 42px; }
+  .activity-copy p { font-size: 13px; }
+  .activity-badge { min-width: 45px; padding: 4px 6px; }
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .account-button:hover, .stats-button:hover, .feed-button:hover { transform: translateY(-1px); }
   .star-choice:hover { color: var(--red); transform: translateY(-2px); }
   .avatar-option:hover { border-color: var(--navy); }
   .detail-more-button:hover { box-shadow: 4px 4px 0 var(--blue); transform: none; }

@@ -28,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=36">
+  <link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -42,6 +42,7 @@
         <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
         <span id="account-label">Friend</span>
       </button>
+      <button id="feed-button" class="feed-button" type="button">Feed</button>
       <button id="stats-button" class="stats-button" type="button">Friend stats</button>
     </div>
     <div class="hero-copy">
@@ -170,6 +171,13 @@
     </div>
   </dialog>
 
+  <dialog id="feed-dialog" class="feed-dialog">
+    <div class="dialog-shell feed-shell">
+      <button id="feed-close" class="close-button" aria-label="Close activity feed">×</button>
+      <div id="feed-content"></div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <aside id="bookmarklet-dock" class="bookmarklet-dock" aria-label="Bookmark helper" hidden>
     <button id="bookmarklet-dismiss" class="bookmarklet-dismiss" type="button" aria-label="Dismiss bookmark helper">×</button>
@@ -183,6 +191,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=32"></script>
+  <script type="module" src="app.js?v=33"></script>
 </body>
 </html>
