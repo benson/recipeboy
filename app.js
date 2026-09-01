@@ -1038,6 +1038,7 @@ function showSignedOut() {
   state.lists = [];
   state.profile = null;
   el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
+  el.floatingRecipeboy.hidden = true;
   if (el.dialog.open) el.dialog.close();
   if (el.editDialog.open) el.editDialog.close();
   if (el.statsDialog.open) el.statsDialog.close();
@@ -1053,6 +1054,7 @@ async function showSignedIn(user) {
   el.authGate.hidden = true;
   el.appMain.hidden = false;
   el.authControls.hidden = false;
+  el.floatingRecipeboy.hidden = false;
   el.accountLabel.textContent = user.label;
   el.account.title = 'Customize your Recipeboy';
   el.bookmarkletDock.hidden = bookmarkletWasDismissed();
@@ -1078,6 +1080,7 @@ async function handleAuthChange(user) {
 
 el.signIn.addEventListener('click', () => authClient?.signIn());
 el.account.addEventListener('click', openProfile);
+el.floatingRecipeboy.addEventListener('click', openProfile);
 window.addEventListener('hashchange', () => {
   const linkedRecipeId = recipeIdFromHash();
   if (linkedRecipeId) {
