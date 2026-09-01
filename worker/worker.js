@@ -1152,6 +1152,21 @@ async function updateRecipeListItem(listId, recipeId, add, env, userId) {
   return json({ listId, recipeId, saved: add });
 }
 
+async function renameRecipeList(listId, request, env, userId) {
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  const name = cleanText(body.name, 40);
+  if (!name) return json({ error: 'Give this list a name first.' }, 400);
+  const list = await env.DB.prepare('SELECT id FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId).first();
+  if (!list) return json({ error: 'List not found.' }, 404);
+  const duplicate = await env.DB.prepare('SELECT id FROM recipe_lists WHERE user_id = ? AND lower(name) = lower(?) AND id != ?').bind(userId, name, listId).first();
+  if (duplicate) return json({ error: 'You already have a list with that name.' }, 409);
+  const now = new Date().toISOString();
+  await env.DB.prepare('UPDATE recipe_lists SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(name, now, listId, userId).run();
+  return json({ list: { id: listId, name, updatedAt: now } });
+}
+
 async function deleteRecipeList(listId, env, userId) {
   const list = await env.DB.prepare('SELECT id FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId).first();
   if (!list) return json({ error: 'List not found.' }, 404);
@@ -1277,6 +1292,10 @@ export default {
         return limited || updateRecipeListItem(listItemMatch[1], listItemMatch[2], request.method === 'PUT', env, auth.userId);
       }
       const listMatch = path.match(/^\/lists\/([a-zA-Z0-9-]+)$/);
+      if (request.method === 'PUT' && listMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more lists.');
+        return limited || renameRecipeList(listMatch[1], request, env, auth.userId);
+      }
       if (request.method === 'DELETE' && listMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more lists.');
         return limited || deleteRecipeList(listMatch[1], env, auth.userId);
@@ -1327,4 +1346,4 @@ export default {
   },
 };
 
-export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeAvatar, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt };
+export { authenticate, deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, findRecipeNode, normalizeAvatar, normalizeRecipe, openAIOutputText, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt };

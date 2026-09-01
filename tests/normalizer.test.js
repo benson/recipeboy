@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign as signBytes } from 'node:crypto';
-import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeAvatar, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
+import worker, { deriveRecipeTags, extractJsonLd, fetchPublicUrl, findLinkedRecipeUrl, normalizeAvatar, normalizeRecipe, parseDuration, parseIngredient, parsePlaintext, parseReaderMarkdown, recipeFromAiPlaintextPayload, recipeFromAiSearchPayload, recipeFromPlaintextWithAi, recipeFromRedditPayload, redditPostId, renameRecipeList, validatePublicUrl, verifyClerkJwt } from '../worker/worker.js';
 
 function signedClerkToken(privateKey, overrides = {}) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -58,6 +58,32 @@ test('CORS preflight allows bearer authorization', async () => {
   const response = await worker.fetch(new Request('https://recipeboy.test/recipes', { method: 'OPTIONS' }), {});
   assert.equal(response.status, 204);
   assert.match(response.headers.get('access-control-allow-headers'), /Authorization/);
+});
+
+test('renames an owned recipe list without losing its identity', async () => {
+  const calls = [];
+  const env = { DB: { prepare(sql) {
+    return { bind(...args) {
+      calls.push({ sql, args });
+      return {
+        async first() {
+          if (sql.includes('id != ?')) return null;
+          if (sql.startsWith('SELECT id FROM recipe_lists')) return { id: 'list-1' };
+          return null;
+        },
+        async run() { return { success: true }; },
+      };
+    } };
+  } } };
+  const request = new Request('https://recipeboy.test/lists/list-1', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '  Dinner heroes  ' }),
+  });
+  const response = await renameRecipeList('list-1', request, env, 'user-friend');
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.list.id, 'list-1');
+  assert.equal(result.list.name, 'Dinner heroes');
+  assert.ok(calls.some(({ sql, args }) => sql.startsWith('UPDATE recipe_lists') && args[0] === 'Dinner heroes' && args[2] === 'list-1'));
 });
 
 test('allows public recipe URLs and rejects local network targets', () => {

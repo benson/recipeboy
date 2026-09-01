@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], lists: [], profile: null, stats: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, confirmDeleteId: null };
+const state = { recipes: [], lists: [], profile: null, stats: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -458,7 +458,10 @@ function listDialogTemplate(recipe) {
   return `<div class="list-hero"><span class="social-eyebrow">Your recipe lists</span><h2>Save this keeper</h2><p>${esc(recipe.title)}</p></div>
     <div class="list-dialog-body">
       <div class="list-choices" aria-label="Choose lists">
-        ${state.lists.length ? state.lists.map((list) => `<label class="list-choice"><input type="checkbox" data-list-toggle="${esc(list.id)}" ${list.recipeIds.includes(recipe.id) ? 'checked' : ''}><span><strong>${esc(list.name)}</strong><small>${list.recipeIds.length} recipe${list.recipeIds.length === 1 ? '' : 's'}</small></span></label>`).join('') : '<p class="list-empty">Make your first list below—weeknight hits, party food, things involving unreasonable amounts of garlic…</p>'}
+        ${state.lists.length ? state.lists.map((list) => `<div class="list-choice ${state.listEditId === list.id ? 'editing' : ''}">
+          <label class="list-choice-toggle"><input type="checkbox" data-list-toggle="${esc(list.id)}" ${list.recipeIds.includes(recipe.id) ? 'checked' : ''}><span><strong>${esc(list.name)}</strong><small>${list.recipeIds.length} recipe${list.recipeIds.length === 1 ? '' : 's'}</small></span></label>
+          ${state.listEditId === list.id ? `<form class="list-rename-form" data-list-rename-form="${esc(list.id)}"><input name="name" value="${esc(list.name)}" maxlength="40" required aria-label="New name for ${esc(list.name)}"><button type="submit">Save</button><button type="button" data-list-rename-cancel>Cancel</button></form>` : `<div class="list-choice-actions"><button type="button" data-list-rename="${esc(list.id)}" aria-label="Rename ${esc(list.name)}">Rename</button><button class="delete ${state.confirmDeleteListId === list.id ? 'confirm' : ''}" type="button" data-list-delete="${esc(list.id)}" aria-label="Delete ${esc(list.name)}">${state.confirmDeleteListId === list.id ? 'Yes, delete' : 'Delete'}</button></div>`}
+        </div>`).join('') : '<p class="list-empty">Make your first list below—weeknight hits, party food, things involving unreasonable amounts of garlic…</p>'}
       </div>
       <form id="new-list-form" class="new-list-form"><label for="new-list-name">New list</label><div><input id="new-list-name" name="name" maxlength="40" required placeholder="Weeknight favorites"><button class="primary-button" type="submit">Create & save</button></div></form>
       <button class="action-button list-done" type="button" data-list-done>Done</button>
@@ -503,6 +506,49 @@ async function createList(event) {
     showToast(`Saved to ${result.list.name}!`);
   } catch (error) { showToast(error.message); }
   finally { button.disabled = false; }
+}
+
+async function renameRecipeList(event) {
+  event.preventDefault();
+  const form = event.target;
+  const listId = form.dataset.listRenameForm;
+  const list = state.lists.find((item) => item.id === listId);
+  const name = String(new FormData(form).get('name') || '').trim();
+  const button = form.querySelector('button[type="submit"]');
+  if (!list || !name) return;
+  button.disabled = true;
+  try {
+    const result = await api(`/lists/${encodeURIComponent(listId)}`, { method: 'PUT', body: JSON.stringify({ name }) });
+    list.name = result.list.name;
+    list.updatedAt = result.list.updatedAt;
+    state.listEditId = null;
+    render();
+    refreshListDialog();
+    showToast(`Renamed to ${list.name}.`);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+}
+
+async function deleteRecipeList(listId) {
+  const list = state.lists.find((item) => item.id === listId);
+  if (!list) return;
+  if (state.confirmDeleteListId !== listId) {
+    state.confirmDeleteListId = listId;
+    state.listEditId = null;
+    refreshListDialog();
+    return;
+  }
+  await api(`/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' });
+  state.lists = state.lists.filter((item) => item.id !== listId);
+  if (state.listId === listId) state.listId = '';
+  state.confirmDeleteListId = null;
+  state.listEditId = null;
+  render();
+  refreshDialog();
+  refreshListDialog();
+  showToast(`Deleted ${list.name}.`);
 }
 
 function socialTemplate(recipe) {
@@ -1020,13 +1066,31 @@ el.editDialog.addEventListener('submit', (event) => { if (event.target.id === 'r
 document.getElementById('list-close').addEventListener('click', () => el.listDialog.close());
 el.listDialog.addEventListener('click', (event) => {
   if (event.target === el.listDialog || event.target.closest('[data-list-done]')) el.listDialog.close();
+  const rename = event.target.closest('[data-list-rename]');
+  if (rename) {
+    state.listEditId = rename.dataset.listRename;
+    state.confirmDeleteListId = null;
+    refreshListDialog();
+    const input = el.listContent.querySelector('[data-list-rename-form] input');
+    input?.focus();
+    input?.select();
+  }
+  if (event.target.closest('[data-list-rename-cancel]')) {
+    state.listEditId = null;
+    refreshListDialog();
+  }
+  const remove = event.target.closest('[data-list-delete]');
+  if (remove) void deleteRecipeList(remove.dataset.listDelete).catch((error) => showToast(error.message));
 });
 el.listDialog.addEventListener('change', (event) => {
   const input = event.target.closest('[data-list-toggle]');
   if (input) void toggleRecipeList(input.dataset.listToggle, input.checked).catch((error) => showToast(error.message));
 });
-el.listDialog.addEventListener('submit', (event) => { if (event.target.id === 'new-list-form') void createList(event); });
-el.listDialog.addEventListener('close', () => { state.listRecipeId = null; });
+el.listDialog.addEventListener('submit', (event) => {
+  if (event.target.id === 'new-list-form') void createList(event);
+  if (event.target.matches('[data-list-rename-form]')) void renameRecipeList(event);
+});
+el.listDialog.addEventListener('close', () => { state.listRecipeId = null; state.listEditId = null; state.confirmDeleteListId = null; });
 el.statsButton?.addEventListener('click', () => { void openStats(); });
 document.getElementById('stats-close')?.addEventListener('click', () => el.statsDialog.close());
 el.statsDialog?.addEventListener('click', (event) => { if (event.target === el.statsDialog) el.statsDialog.close(); });
