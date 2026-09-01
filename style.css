@@ -292,14 +292,19 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .detail-primary-actions { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 9px; min-width: 0; }
 .detail-primary-actions > .action-button { min-height: 42px; }
 .detail-more { position: relative; flex: none; margin-left: auto; }
-.detail-more-button { min-height: 42px; gap: 8px; padding-inline: 14px; }
-.detail-more-button > span { letter-spacing: -.12em; transform: translateY(-1px); }
-.detail-more-menu { position: absolute; top: calc(100% + 9px); right: 0; z-index: 6; display: grid; gap: 5px; width: 230px; padding: 7px; background: var(--cream); border: 4px solid var(--navy); border-radius: 15px; box-shadow: 5px 5px 0 var(--blue); transform-origin: top right; transition: opacity 160ms cubic-bezier(.23,1,.32,1), transform 160ms cubic-bezier(.23,1,.32,1); }
-.detail-more-menu > button, .detail-more-menu > a { display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%; min-height: 40px; padding: 8px 10px; color: var(--navy); background: var(--white); border: 2px solid transparent; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 900; text-align: left; text-decoration: none; cursor: pointer; }
-.detail-more-menu > button:focus-visible, .detail-more-menu > a:focus-visible { outline: 3px solid var(--red); outline-offset: -1px; }
+.detail-more-button { min-height: 42px; gap: 8px; padding-inline: 14px; transition: transform 120ms cubic-bezier(.23,1,.32,1), box-shadow 120ms cubic-bezier(.23,1,.32,1); }
+.detail-more-dots { letter-spacing: -.12em; transform: translateY(-1px); }
+.detail-more-button[aria-expanded="true"] { color: var(--white); background: var(--navy); box-shadow: 3px 3px 0 var(--blue); transform: none; }
+.detail-more-button:active, .detail-more-button[aria-expanded="true"]:active { box-shadow: 2px 2px 0 var(--blue); transform: scale(.97); }
+.detail-more-menu { position: absolute; top: calc(100% + 9px); right: 0; z-index: 6; display: grid; gap: 6px; width: 230px; padding: 8px; background: var(--cream); border: 4px solid var(--navy); border-radius: 16px; box-shadow: 5px 5px 0 var(--blue); transform-origin: top right; transition: opacity 160ms cubic-bezier(.23,1,.32,1), transform 160ms cubic-bezier(.23,1,.32,1); }
+.detail-more-menu > button, .detail-more-menu > a { display: flex; position: relative; align-items: center; justify-content: space-between; gap: 15px; width: 100%; min-height: 42px; padding: 8px 9px 8px 11px; color: var(--navy); background: var(--white); border: 2px solid #d8d1bc; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 900; line-height: 1.15; text-align: left; text-decoration: none; cursor: pointer; transition: transform 120ms cubic-bezier(.23,1,.32,1); }
+.detail-more-menu > button:focus-visible, .detail-more-menu > a:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
 .detail-more-menu > button:active, .detail-more-menu > a:active { transform: scale(.98); }
-.detail-more-menu .detail-more-danger { color: #8c2630; border-top: 2px solid #e2d9c1; }
-.detail-more-menu .detail-more-danger.confirm { color: var(--white); background: #8c2630; }
+.detail-menu-icon { display: grid; place-items: center; width: 23px; height: 23px; flex: none; color: var(--navy); background: var(--cream); border: 2px solid currentColor; border-radius: 50%; font-size: 11px; line-height: 1; }
+.detail-more-menu .detail-more-danger { margin-top: 2px; color: #8c2630; border-color: #e1c6c0; }
+.detail-more-menu .detail-more-danger .detail-menu-icon { color: #8c2630; }
+.detail-more-menu .detail-more-danger.confirm { color: var(--white); background: #8c2630; border-color: var(--navy); }
+.detail-more-menu .detail-more-danger.confirm .detail-menu-icon { color: var(--white); background: transparent; }
 @starting-style { .detail-more-menu:not([hidden]) { opacity: 0; transform: translateY(-5px) scale(.98); } }
 .recipe-scale { display: inline-flex; align-items: center; min-height: 42px; overflow: hidden; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; box-shadow: 4px 4px 0 var(--navy); }
 .recipe-scale > span { padding: 0 9px 0 13px; color: #66718a; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
@@ -593,8 +598,12 @@ footer { height: 12px; background: var(--navy); }
 @media (hover: hover) and (pointer: fine) {
   .star-choice:hover { color: var(--red); transform: translateY(-2px); }
   .avatar-option:hover { border-color: var(--navy); }
-  .detail-more-menu > button:hover, .detail-more-menu > a:hover { color: var(--white); background: var(--blue); }
-  .detail-more-menu > .detail-more-danger:hover { color: var(--white); background: #8c2630; }
+  .detail-more-button:hover { box-shadow: 4px 4px 0 var(--blue); transform: none; }
+  .detail-more-button[aria-expanded="true"]:hover { box-shadow: 3px 3px 0 var(--blue); transform: none; }
+  .detail-more-menu > button:hover, .detail-more-menu > a:hover { color: var(--white); background: var(--blue); border-color: var(--navy); }
+  .detail-more-menu > button:hover .detail-menu-icon, .detail-more-menu > a:hover .detail-menu-icon { color: var(--navy); background: var(--white); }
+  .detail-more-menu > .detail-more-danger:hover { color: var(--white); background: #8c2630; border-color: var(--navy); }
+  .detail-more-button:active, .detail-more-button[aria-expanded="true"]:active { box-shadow: 2px 2px 0 var(--blue); transform: scale(.97); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -664,12 +664,12 @@ function detailTemplate(recipe) {
         <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, rate, or save</button>'}
       </div>
       <div class="detail-more" data-detail-more>
-        <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions">More <span aria-hidden="true">•••</span></button>
+        <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions">More <span class="detail-more-dots" aria-hidden="true">•••</span></button>
         <div class="detail-more-menu" role="menu" ${deleteConfirming ? '' : 'hidden'}>
-          <button type="button" role="menuitem" data-share="${esc(recipe.id)}"><span>Copy recipe link</span><span aria-hidden="true">↗</span></button>
-          ${sourceUrl ? `<a role="menuitem" href="${esc(sourceUrl)}" target="_blank" rel="noopener"><span>View original recipe</span><span aria-hidden="true">↗</span></a>` : ''}
-          ${recipe.canEdit ? `<button type="button" role="menuitem" data-edit-recipe="${esc(recipe.id)}"><span>Edit recipe</span><span aria-hidden="true">✎</span></button>` : ''}
-          ${state.isSignedIn ? `<button class="detail-more-danger ${deleteConfirming ? 'confirm' : ''}" type="button" role="menuitem" data-delete="${esc(recipe.id)}"><span>${deleteConfirming ? 'Yes, delete recipe' : 'Delete recipe'}</span><span aria-hidden="true">${deleteConfirming ? '!' : '×'}</span></button>` : ''}
+          <button type="button" role="menuitem" data-share="${esc(recipe.id)}"><span>Copy recipe link</span><span class="detail-menu-icon" aria-hidden="true">↗</span></button>
+          ${sourceUrl ? `<a role="menuitem" href="${esc(sourceUrl)}" target="_blank" rel="noopener"><span>View original recipe</span><span class="detail-menu-icon" aria-hidden="true">↗</span></a>` : ''}
+          ${recipe.canEdit ? `<button type="button" role="menuitem" data-edit-recipe="${esc(recipe.id)}"><span>Edit recipe</span><span class="detail-menu-icon" aria-hidden="true">✎</span></button>` : ''}
+          ${state.isSignedIn ? `<button class="detail-more-danger ${deleteConfirming ? 'confirm' : ''}" type="button" role="menuitem" data-delete="${esc(recipe.id)}"><span>${deleteConfirming ? 'Yes, delete recipe' : 'Delete recipe'}</span><span class="detail-menu-icon" aria-hidden="true">${deleteConfirming ? '!' : '×'}</span></button>` : ''}
         </div>
       </div>
     </div>
