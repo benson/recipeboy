@@ -426,6 +426,14 @@ function closeCustomSelects(except = null) {
   }
 }
 
+function closeDetailMenus(except = null) {
+  for (const wrap of document.querySelectorAll('[data-detail-more]')) {
+    if (wrap === except) continue;
+    wrap.querySelector('.detail-more-menu').hidden = true;
+    wrap.querySelector('.detail-more-button').setAttribute('aria-expanded', 'false');
+  }
+}
+
 function cardTemplate(recipe) {
   const time = minutesLabel(recipe);
   const source = recipe.sourceName || (recipe.sourceUrl ? 'From the web' : 'Friends’ recipe');
@@ -637,6 +645,7 @@ function detailTemplate(recipe) {
   const steps = recipe.instructions.map((step) => `<li>${esc(step)}</li>`).join('');
   const time = minutesLabel(recipe);
   const photos = recipe.photos || [];
+  const deleteConfirming = state.confirmDeleteId === recipe.id;
   return `<div class="detail-hero">
       <span class="source-label">${esc(recipe.sourceName || 'Friends’ recipe')}</span>
       <h2>${esc(recipe.title)}</h2>
@@ -648,14 +657,21 @@ function detailTemplate(recipe) {
       ${(recipe.tags || []).length ? `<div class="detail-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="detail-actions">
-      <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
-      <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
-      <button class="action-button" data-share="${esc(recipe.id)}">Copy recipe link</button>
-      ${state.isSignedIn ? `<button class="action-button" data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to lists' : 'Save to a list'}</button>
-      <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, rate, or save</button>'}
-      ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
-      ${recipe.canEdit ? `<button class="action-button edit" data-edit-recipe="${esc(recipe.id)}">Edit recipe</button>` : ''}
-      ${state.isSignedIn ? `<button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>` : ''}
+      <div class="detail-primary-actions">
+        <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
+        <button class="action-button" data-copy="${esc(recipe.id)}" aria-label="Copy shopping list">Copy list</button>
+        ${state.isSignedIn ? `<button class="action-button" data-save-list="${esc(recipe.id)}" aria-label="${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to recipe lists' : 'Save to a recipe list'}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
+        <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, rate, or save</button>'}
+      </div>
+      <div class="detail-more" data-detail-more>
+        <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions">More <span aria-hidden="true">•••</span></button>
+        <div class="detail-more-menu" role="menu" ${deleteConfirming ? '' : 'hidden'}>
+          <button type="button" role="menuitem" data-share="${esc(recipe.id)}"><span>Copy recipe link</span><span aria-hidden="true">↗</span></button>
+          ${sourceUrl ? `<a role="menuitem" href="${esc(sourceUrl)}" target="_blank" rel="noopener"><span>View original recipe</span><span aria-hidden="true">↗</span></a>` : ''}
+          ${recipe.canEdit ? `<button type="button" role="menuitem" data-edit-recipe="${esc(recipe.id)}"><span>Edit recipe</span><span aria-hidden="true">✎</span></button>` : ''}
+          ${state.isSignedIn ? `<button class="detail-more-danger ${deleteConfirming ? 'confirm' : ''}" type="button" role="menuitem" data-delete="${esc(recipe.id)}"><span>${deleteConfirming ? 'Yes, delete recipe' : 'Delete recipe'}</span><span aria-hidden="true">${deleteConfirming ? '!' : '×'}</span></button>` : ''}
+        </div>
+      </div>
     </div>
     <div class="recipe-columns">
       <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
@@ -1054,6 +1070,19 @@ el.search.addEventListener('input', () => { state.query = el.search.value; rende
 el.sort.addEventListener('change', () => { state.sort = el.sort.value; syncCustomSelect(el.sort); render(); });
 el.listFilter.addEventListener('change', () => { state.listId = el.listFilter.value; syncCustomSelect(el.listFilter); render(); });
 document.addEventListener('click', (event) => {
+  const detailMenuToggle = event.target.closest('.detail-more-button');
+  if (detailMenuToggle) {
+    const wrap = detailMenuToggle.closest('[data-detail-more]');
+    const menu = wrap.querySelector('.detail-more-menu');
+    const opening = menu.hidden;
+    closeDetailMenus(wrap);
+    menu.hidden = !opening;
+    detailMenuToggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  const detailMenuAction = event.target.closest('.detail-more-menu [role="menuitem"]');
+  if (detailMenuAction && !detailMenuAction.matches('[data-delete]')) closeDetailMenus();
+  if (!event.target.closest('[data-detail-more]')) closeDetailMenus();
   const option = event.target.closest('[data-select-option]');
   if (option) {
     const wrap = option.closest('[data-custom-select]');
@@ -1076,7 +1105,10 @@ document.addEventListener('click', (event) => {
   if (!event.target.closest('[data-custom-select]')) closeCustomSelects();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeCustomSelects();
+  if (event.key === 'Escape') {
+    closeCustomSelects();
+    closeDetailMenus();
+  }
 });
 el.tagFilters.addEventListener('click', (event) => {
   const button = event.target.closest('[data-tag]');

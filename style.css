@@ -288,7 +288,19 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .detail-hero p { max-width: 620px; margin-bottom: 0; }
 .detail-meta { display: flex; flex-wrap: wrap; gap: 5px 0; margin-top: 17px; color: #4f5870; font-size: 13px; font-weight: 900; }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
-.detail-actions { display: flex; flex-wrap: wrap; gap: 9px; padding: 20px 30px 0; }
+.detail-actions { display: flex; align-items: flex-start; gap: 9px; padding: 20px 30px 0; }
+.detail-primary-actions { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 9px; min-width: 0; }
+.detail-primary-actions > .action-button { min-height: 42px; }
+.detail-more { position: relative; flex: none; margin-left: auto; }
+.detail-more-button { min-height: 42px; gap: 8px; padding-inline: 14px; }
+.detail-more-button > span { letter-spacing: -.12em; transform: translateY(-1px); }
+.detail-more-menu { position: absolute; top: calc(100% + 9px); right: 0; z-index: 6; display: grid; gap: 5px; width: 230px; padding: 7px; background: var(--cream); border: 4px solid var(--navy); border-radius: 15px; box-shadow: 5px 5px 0 var(--blue); transform-origin: top right; transition: opacity 160ms cubic-bezier(.23,1,.32,1), transform 160ms cubic-bezier(.23,1,.32,1); }
+.detail-more-menu > button, .detail-more-menu > a { display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%; min-height: 40px; padding: 8px 10px; color: var(--navy); background: var(--white); border: 2px solid transparent; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 900; text-align: left; text-decoration: none; cursor: pointer; }
+.detail-more-menu > button:focus-visible, .detail-more-menu > a:focus-visible { outline: 3px solid var(--red); outline-offset: -1px; }
+.detail-more-menu > button:active, .detail-more-menu > a:active { transform: scale(.98); }
+.detail-more-menu .detail-more-danger { color: #8c2630; border-top: 2px solid #e2d9c1; }
+.detail-more-menu .detail-more-danger.confirm { color: var(--white); background: #8c2630; }
+@starting-style { .detail-more-menu:not([hidden]) { opacity: 0; transform: translateY(-5px) scale(.98); } }
 .recipe-scale { display: inline-flex; align-items: center; min-height: 42px; overflow: hidden; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; box-shadow: 4px 4px 0 var(--navy); }
 .recipe-scale > span { padding: 0 9px 0 13px; color: #66718a; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .recipe-scale button { align-self: stretch; width: 35px; color: var(--navy); background: var(--yellow); border: 0; border-left: 3px solid var(--navy); font-size: 20px; font-weight: 900; cursor: pointer; }
@@ -550,6 +562,7 @@ footer { height: 12px; background: var(--navy); }
   .recipe-card { min-height: 285px; }
   .empty-state { flex-direction: column; text-align: center; }
   .detail-hero, .detail-actions, .recipe-columns { padding-left: 20px; padding-right: 20px; }
+  .detail-more-menu { position: fixed; top: auto; right: 20px; bottom: 22px; left: 20px; width: auto; transform-origin: bottom right; box-shadow: 6px 6px 0 var(--blue); }
   .recipe-scale { width: 100%; justify-content: space-between; }
   .recipe-social { padding-left: 20px; padding-right: 20px; }
   .recipe-photos { padding-left: 20px; padding-right: 20px; }
@@ -580,6 +593,8 @@ footer { height: 12px; background: var(--navy); }
 @media (hover: hover) and (pointer: fine) {
   .star-choice:hover { color: var(--red); transform: translateY(-2px); }
   .avatar-option:hover { border-color: var(--navy); }
+  .detail-more-menu > button:hover, .detail-more-menu > a:hover { color: var(--white); background: var(--blue); }
+  .detail-more-menu > .detail-more-danger:hover { color: var(--white); background: #8c2630; }
 }
 
 @media (prefers-reduced-motion: reduce) {
