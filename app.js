@@ -408,7 +408,13 @@ function closeCustomSelects(except = null) {
 function cardTemplate(recipe) {
   const time = minutesLabel(recipe);
   const source = recipe.sourceName || (recipe.sourceUrl ? 'From the web' : 'Friends’ recipe');
-  const makers = (recipe.makers || []).slice(0, 4);
+  const allMakers = recipe.makers || [];
+  const makers = allMakers.slice(0, 4);
+  const makerNames = allMakers.map((maker) => maker.displayName).filter(Boolean);
+  const unnamedCooks = Math.max(0, Number(recipe.madeCount || 0) - makerNames.length);
+  const cookedBy = makerNames.length
+    ? `${makerNames.join(', ')}${unnamedCooks ? ` + ${unnamedCooks} earlier` : ''}`
+    : (recipe.madeCount ? `${recipe.madeCount} earlier cook${recipe.madeCount === 1 ? '' : 's'}` : 'Nobody yet');
   const firstPhoto = (recipe.photos || [])[0];
   const addedBy = recipe.addedBy?.displayName;
   return `<article class="recipe-card" data-id="${esc(recipe.id)}">
@@ -426,7 +432,7 @@ function cardTemplate(recipe) {
       <div class="card-rating ${recipe.ratingCount ? '' : 'unrated'}" aria-label="${esc(ratingSummary(recipe))}"><span aria-hidden="true">★</span><strong>${recipe.ratingCount ? Number(recipe.ratingAverage).toFixed(1) : 'New'}</strong><small>${recipe.ratingCount ? `${recipe.ratingCount} rating${recipe.ratingCount === 1 ? '' : 's'}` : 'Not rated yet'}</small></div>
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
       <div class="card-contributor">${recipe.addedBy ? avatarTemplate(recipe.addedBy, 'avatar-tiny') : ''}<span><small>Added by</small><strong>${esc(addedBy || 'an early Recipeboy friend')}</strong></span></div>
-      <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${recipe.madeCount || 0} friends"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${makers.length ? `${recipe.madeCount} friend${recipe.madeCount === 1 ? '' : 's'}` : (recipe.madeCount ? `${recipe.madeCount} earlier cook${recipe.madeCount === 1 ? '' : 's'}` : 'Nobody yet')}</strong></span></div>
+      <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${esc(cookedBy)}"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${esc(cookedBy)}</strong></span></div>
     </div>
     <div class="card-actions card-actions-three">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
