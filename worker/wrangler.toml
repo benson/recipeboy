@@ -11,6 +11,10 @@ binding = "DB"
 database_name = "recipeboy-db"
 database_id = "fa2de50f-6ad7-4133-b4ea-c9f9c41b0b6b"
 
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "recipeboy-photos"
+
 [[ratelimits]]
 name = "CREATE_RATE_LIMITER"
 namespace_id = "726931001"

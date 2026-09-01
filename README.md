@@ -1,10 +1,10 @@
 # Recipeboy
 
-A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, and a per-person “I made this” count.
+A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, cooking photos, ratings, and a per-person “I cooked this” count. Recipe cards distinguish who added a recipe from the friends who cooked it, and the stats page celebrates the top contributors, cooks, and reviewers.
 
 The recipe box is shared by signed-in friends. Clerk handles browser sign-in and the Worker verifies every session JWT before allowing recipe reads or writes. Mutation endpoints are also rate-limited, oversized requests and recipe pages are rejected, redirects are revalidated before fetching, and deleted recipes are soft-deleted so the UI can offer Undo. All recipe content is escaped before browser rendering and is never executed as code.
 
-The static frontend is hosted by GitHub Pages at [recipeboy.bensonperry.com](https://recipeboy.bensonperry.com/). A small Cloudflare Worker uses D1 for shared storage and extracts schema.org Recipe data from pasted links.
+The static frontend is hosted by GitHub Pages at [recipeboy.bensonperry.com](https://recipeboy.bensonperry.com/). A small Cloudflare Worker uses D1 for shared recipe data, R2 for compressed cooking photos, and extracts schema.org Recipe data from pasted links.
 
 Recipeboy first reads standard schema.org `Recipe` data, which is published by most dedicated recipe sites. If a site blocks the direct importer, the Worker retries through Jina Reader and normalizes its recipe markdown. Cooking articles that link to a same-site recipe are followed automatically.
 
@@ -56,5 +56,7 @@ npm run deploy:api
 ```
 
 Existing databases should apply each file in `worker/migrations` once before deploying the corresponding Worker version.
+
+Photo uploads use the `recipeboy-photos` R2 bucket bound as `PHOTOS` in `worker/wrangler.toml`. The browser downsizes uploads before sending them; the Worker accepts JPEG, PNG, and WebP files up to 8 MB and caps each recipe at 12 photos.
 
 Recipeboy has its own Clerk application and production instance on `recipeboy.bensonperry.com`, so Recipeboy accounts are separate from Biblioplex accounts. The Worker needs Clerk's PEM public verification key as `CLERK_JWT_KEY`; it is public key material but is stored as a Worker secret. `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` live in `worker/wrangler.toml`.

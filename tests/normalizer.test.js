@@ -33,6 +33,9 @@ test('normalizes avatar choices to the supported Recipeboy palette', () => {
   assert.deepEqual(normalizeAvatar({ background: 'tomato', accessory: 'chef', badge: 'fire' }), {
     background: 'tomato', character: 'chef', flavor: 'spicy',
   });
+  assert.deepEqual(normalizeAvatar({ background: 'bubblegum', character: 'mushroom', flavor: 'citrusy' }), {
+    background: 'bubblegum', character: 'mushroom', flavor: 'citrusy',
+  });
 });
 
 test('verifies Clerk JWT signatures, issuer, and authorized frontend', async () => {

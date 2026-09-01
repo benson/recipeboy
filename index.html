@@ -28,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -71,6 +71,7 @@
         <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link… or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
         <div class="form-footer">
           <span id="input-hint">Recipeboy cleans it up and saves it.</span>
+          <label class="feed-photo-button"><input id="recipe-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple><span id="recipe-photo-label">Add photos</span></label>
           <button class="primary-button" type="submit">
             <span>Normalize it!</span>
             <span aria-hidden="true">→</span>
@@ -87,6 +88,7 @@
             <h2 id="collection-title">The good stuff</h2>
             <p id="recipe-count">Loading the recipe box…</p>
           </div>
+          <button id="stats-button" class="stats-button" type="button">Friend stats</button>
         </div>
         <div class="collection-tools">
           <label class="list-filter-wrap">
@@ -102,6 +104,7 @@
             <span>Sort</span>
             <select id="sort">
               <option value="newest">Newest</option>
+              <option value="top-rated">Highest rated</option>
               <option value="most-made">Most made</option>
               <option value="quickest">Quickest</option>
               <option value="a-z">A–Z</option>
@@ -151,6 +154,13 @@
     </div>
   </dialog>
 
+  <dialog id="stats-dialog" class="stats-dialog">
+    <div class="dialog-shell stats-shell">
+      <button id="stats-close" class="close-button" aria-label="Close friend stats">×</button>
+      <div id="stats-content"></div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <aside id="bookmarklet-dock" class="bookmarklet-dock" aria-label="Bookmark helper" hidden>
     <button id="bookmarklet-dismiss" class="bookmarklet-dismiss" type="button" aria-label="Dismiss bookmark helper">×</button>
@@ -164,6 +174,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>

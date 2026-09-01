@@ -1,6 +1,7 @@
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
 const MAX_REQUEST_BODY = 256_000;
+const MAX_PHOTO_BYTES = 8_000_000;
 const MAX_REDIRECTS = 5;
 const OPENAI_RECIPE_MODEL = 'gpt-5.4-nano';
 let redditTokenCache = null;
@@ -126,9 +127,9 @@ function cleanText(value, limit = 5000) {
   return String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit);
 }
 
-const AVATAR_BACKGROUNDS = new Set(['sunshine', 'tomato', 'blueberry', 'mint']);
-const AVATAR_CHARACTERS = new Set(['classic', 'chef', 'shallot', 'ginger', 'scallion', 'chili', 'carrot', 'basil', 'lemon', 'tomato']);
-const AVATAR_FLAVORS = new Set(['savory', 'spicy', 'umami', 'minty', 'sweet', 'smoky']);
+const AVATAR_BACKGROUNDS = new Set(['sunshine', 'tomato', 'blueberry', 'mint', 'grape', 'peach', 'aqua', 'bubblegum']);
+const AVATAR_CHARACTERS = new Set(['classic', 'chef', 'shallot', 'ginger', 'scallion', 'chili', 'carrot', 'basil', 'lemon', 'tomato', 'mushroom', 'avocado', 'corn', 'radish', 'broccoli', 'eggplant', 'potato', 'pea', 'rosemary', 'pepper']);
+const AVATAR_FLAVORS = new Set(['savory', 'spicy', 'umami', 'minty', 'sweet', 'smoky', 'citrusy', 'garlicky', 'herby', 'cheesy', 'earthy', 'buttery']);
 
 function normalizeAvatar(value = {}) {
   const avatar = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -858,6 +859,11 @@ function rowToRecipe(row) {
     viewerReview: String(row.viewer_review || ''),
     makers: [],
     reviews: [],
+    photos: [],
+    addedBy: row.creator_user_id ? {
+      ...profileFromRow({ display_name: row.creator_display_name, avatar_json: row.creator_avatar_json }),
+      isViewer: Boolean(row.added_by_viewer),
+    } : null,
     createdAt: row.created_at,
     canEdit: Boolean(row.can_edit),
   };
@@ -867,20 +873,25 @@ async function listRecipes(env, userId) {
   const { results } = await env.DB.prepare(`
     SELECT r.id, r.data_json, r.made_count, r.created_at,
       1 AS can_edit,
+      r.created_by_user_id AS creator_user_id,
+      creator.display_name AS creator_display_name,
+      creator.avatar_json AS creator_avatar_json,
+      (r.created_by_user_id = ?) AS added_by_viewer,
       EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer,
       COALESCE((SELECT AVG(rr.rating) FROM recipe_reviews rr WHERE rr.recipe_id = r.id), 0) AS rating_average,
       (SELECT COUNT(*) FROM recipe_reviews rr WHERE rr.recipe_id = r.id) AS rating_count,
       COALESCE((SELECT rr.rating FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), 0) AS viewer_rating,
       COALESCE((SELECT rr.review_text FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), '') AS viewer_review
     FROM recipes r
+    LEFT JOIN user_profiles creator ON creator.user_id = r.created_by_user_id
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId, userId, userId).all();
+  `).bind(userId, userId, userId, userId).all();
   const recipes = results.map(rowToRecipe);
   if (!recipes.length) return recipes;
 
-  const [makerRows, reviewRows] = await Promise.all([
+  const [makerRows, reviewRows, photoRows] = await Promise.all([
     env.DB.prepare(`
       SELECT m.recipe_id, m.user_id, m.created_at, p.display_name, p.avatar_json
       FROM recipe_makes m
@@ -894,6 +905,13 @@ async function listRecipes(env, userId) {
       JOIN recipes r ON r.id = rr.recipe_id AND r.deleted_at IS NULL
       LEFT JOIN user_profiles p ON p.user_id = rr.user_id
       ORDER BY rr.updated_at DESC
+    `).all(),
+    env.DB.prepare(`
+      SELECT ph.recipe_id, ph.id, ph.object_key, ph.user_id, ph.created_at, p.display_name, p.avatar_json
+      FROM recipe_photos ph
+      JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = ph.user_id
+      ORDER BY ph.created_at DESC
     `).all(),
   ]);
   const byId = new Map(recipes.map((recipe) => [recipe.id, recipe]));
@@ -909,6 +927,15 @@ async function listRecipes(env, userId) {
       text: String(row.review_text || ''),
       updatedAt: row.updated_at,
       isViewer: row.user_id === userId,
+    });
+  }
+  for (const row of photoRows.results || []) {
+    const recipe = byId.get(row.recipe_id);
+    if (recipe) recipe.photos.push({
+      id: row.id,
+      url: `/photos/${encodeURIComponent(row.object_key)}`,
+      addedAt: row.created_at,
+      addedBy: { ...profileFromRow(row), isViewer: row.user_id === userId },
     });
   }
   return recipes;
@@ -955,7 +982,7 @@ async function createRecipe(request, env, userId) {
   const createdAt = new Date().toISOString();
   await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
     .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt, userId).run();
-  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, ratingAverage: 0, ratingCount: 0, viewerRating: 0, viewerReview: '', makers: [], reviews: [], createdAt, canEdit: true } }, 201);
+  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, ratingAverage: 0, ratingCount: 0, viewerRating: 0, viewerReview: '', makers: [], reviews: [], photos: [], addedBy: { ...(await profileForUser(env, userId)), isViewer: true }, createdAt, canEdit: true } }, 201);
 }
 
 async function markMade(id, env, userId) {
@@ -1135,6 +1162,79 @@ async function deleteRecipeList(listId, env, userId) {
   return json({ id: listId, deleted: true });
 }
 
+async function addRecipePhoto(id, request, env, userId) {
+  const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+  if (!recipe) return json({ error: 'Recipe not found.' }, 404);
+  const declaredLength = Number(request.headers.get('content-length') || 0);
+  if (declaredLength > MAX_PHOTO_BYTES + 500_000) return json({ error: 'Keep each photo under 8 MB.' }, 413);
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_photos WHERE recipe_id = ?').bind(id).first();
+  if (Number(count?.count || 0) >= 12) return json({ error: 'This recipe already has twelve photos.' }, 400);
+  let form;
+  try { form = await request.formData(); }
+  catch { return json({ error: 'Recipeboy could not read that photo.' }, 400); }
+  const file = form.get('photo');
+  const allowed = new Map([['image/jpeg', 'jpg'], ['image/png', 'png'], ['image/webp', 'webp']]);
+  if (!(file instanceof File) || !allowed.has(file.type)) return json({ error: 'Use a JPEG, PNG, or WebP photo.' }, 400);
+  if (!file.size || file.size > MAX_PHOTO_BYTES) return json({ error: 'Keep each photo under 8 MB.' }, 413);
+  const photoId = crypto.randomUUID().slice(0, 12);
+  const objectKey = `${id}/${crypto.randomUUID()}.${allowed.get(file.type)}`;
+  const createdAt = new Date().toISOString();
+  await env.PHOTOS.put(objectKey, file.stream(), { httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=31536000, immutable' } });
+  try {
+    await env.DB.prepare('INSERT INTO recipe_photos (id, recipe_id, user_id, object_key, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(photoId, id, userId, objectKey, createdAt).run();
+  } catch (error) {
+    await env.PHOTOS.delete(objectKey);
+    throw error;
+  }
+  return json({ photo: { id: photoId, url: `/photos/${encodeURIComponent(objectKey)}`, addedAt: createdAt, addedBy: { ...(await profileForUser(env, userId)), isViewer: true } } }, 201);
+}
+
+async function deleteRecipePhoto(recipeId, photoId, env) {
+  const row = await env.DB.prepare(`
+    SELECT ph.object_key FROM recipe_photos ph
+    JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
+    WHERE ph.id = ? AND ph.recipe_id = ?
+  `).bind(photoId, recipeId).first();
+  if (!row) return json({ error: 'Photo not found.' }, 404);
+  await env.PHOTOS.delete(row.object_key);
+  await env.DB.prepare('DELETE FROM recipe_photos WHERE id = ? AND recipe_id = ?').bind(photoId, recipeId).run();
+  return json({ id: photoId, deleted: true });
+}
+
+async function serveRecipePhoto(objectKey, env) {
+  const object = await env.PHOTOS.get(objectKey);
+  if (!object) return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain', 'X-Content-Type-Options': 'nosniff' } });
+  const headers = new Headers({
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': object.httpMetadata?.cacheControl || 'public, max-age=31536000, immutable',
+    'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+    'ETag': object.httpEtag,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  return new Response(object.body, { headers });
+}
+
+async function friendStats(env, userId) {
+  const { results } = await env.DB.prepare(`
+    SELECT p.user_id, p.display_name, p.avatar_json,
+      (SELECT COUNT(*) FROM recipes r WHERE r.created_by_user_id = p.user_id AND r.deleted_at IS NULL) AS recipes_added,
+      (SELECT COUNT(*) FROM recipe_makes m JOIN recipes r ON r.id = m.recipe_id AND r.deleted_at IS NULL WHERE m.user_id = p.user_id) AS recipes_cooked,
+      (SELECT COUNT(*) FROM recipe_reviews rr JOIN recipes r ON r.id = rr.recipe_id AND r.deleted_at IS NULL WHERE rr.user_id = p.user_id) AS reviews_written
+    FROM user_profiles p
+  `).all();
+  const leaderboard = (field) => (results || [])
+    .map((row) => ({ ...profileFromRow(row), count: Number(row[field] || 0), isViewer: row.user_id === userId }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count || a.displayName.localeCompare(b.displayName))
+    .slice(0, 12);
+  return {
+    recipesAdded: leaderboard('recipes_added'),
+    recipesCooked: leaderboard('recipes_cooked'),
+    reviewsWritten: leaderboard('reviews_written'),
+  };
+}
+
 async function rateLimit(request, limiter, message) {
   if (!limiter?.limit) return null;
   const key = request.headers.get('cf-connecting-ip') || 'local';
@@ -1149,6 +1249,8 @@ export default {
     const path = url.pathname.replace(/\/+$/, '') || '/';
     try {
       if (request.method === 'GET' && path === '/') return json({ ok: true, service: 'recipeboy-api' });
+      const publicPhotoMatch = path.match(/^\/photos\/(.+)$/);
+      if (request.method === 'GET' && publicPhotoMatch) return serveRecipePhoto(decodeURIComponent(publicPhotoMatch[1]), env);
       let auth;
       try { auth = await authenticate(request, env); }
       catch { return json({ error: 'Sign in to use the shared recipe box.' }, 401); }
@@ -1159,6 +1261,7 @@ export default {
         return limited || updateProfile(request, env, auth.userId);
       }
       if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env, auth.userId) });
+      if (request.method === 'GET' && path === '/stats') return json({ stats: await friendStats(env, auth.userId) });
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
         return limited || createRecipe(request, env, auth.userId);
@@ -1182,6 +1285,16 @@ export default {
       if (request.method === 'POST' && madeMatch) {
         const limited = await rateLimit(request, env.MADE_RATE_LIMITER, 'Recipeboy believes you. Give the button a minute.');
         return limited || markMade(madeMatch[1], env, auth.userId);
+      }
+      const photoCollectionMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos$/);
+      if (request.method === 'POST' && photoCollectionMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before adding more photos.');
+        return limited || addRecipePhoto(photoCollectionMatch[1], request, env, auth.userId);
+      }
+      const photoMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos\/([a-zA-Z0-9-]+)$/);
+      if (request.method === 'DELETE' && photoMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more photos.');
+        return limited || deleteRecipePhoto(photoMatch[1], photoMatch[2], env);
       }
       const reviewMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/review$/);
       if (request.method === 'POST' && reviewMatch) {
