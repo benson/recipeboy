@@ -113,6 +113,7 @@ main { width: min(1120px, calc(100% - 36px)); margin: 20px auto 72px; }
 .collection-title-wrap { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; gap: 15px; }
 .stats-button, .feed-button { flex: none; padding: 8px 12px; color: var(--navy); background: var(--yellow); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--red); font-size: 12px; font-weight: 900; cursor: pointer; }
 .feed-button { color: var(--white); background: var(--blue); box-shadow-color: var(--navy); }
+.stats-label-short { display: none; }
 .feeder-heading p { margin: 0; text-align: right; }
 
 form { display: grid; grid-template-columns: minmax(0, 1fr) 190px; align-items: center; gap: 15px; padding: 13px 20px 15px; }
@@ -565,8 +566,8 @@ footer { height: 12px; background: var(--navy); }
   .account-button { min-height: 38px; padding-right: 6px; }
   .account-button #account-label { display: none; }
   .stats-button, .feed-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
-  .stats-button { font-size: 0; }
-  .stats-button::after { content: "Stats"; font-size: 11px; }
+  .stats-label-full { display: none; }
+  .stats-label-short { display: inline; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
   .auth-gate img { width: 120px; }
   .auth-gate .primary-button { width: 100%; }
