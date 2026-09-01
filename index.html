@@ -28,9 +28,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=31">
+  <link rel="stylesheet" href="style.css?v=32">
 </head>
-<body>
+<body class="auth-pending">
   <div class="top-stripe" aria-hidden="true"></div>
   <header class="hero">
     <div id="auth-controls" class="auth-controls" hidden>
@@ -50,7 +50,12 @@
     </div>
   </header>
 
-  <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title">
+  <section id="auth-loading" class="auth-loading" role="status" aria-live="polite">
+    <img src="assets/recipeboy-mascot.svg" alt="" aria-hidden="true">
+    <div><span class="auth-eyebrow">Recipeboy is setting the table</span><p>Opening your recipe box…</p></div>
+  </section>
+
+  <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title" hidden>
     <img src="assets/recipeboy-mascot.svg" alt="" aria-hidden="true">
     <div>
       <span class="auth-eyebrow">Friends only</span>
@@ -171,10 +176,10 @@
     </a>
     <span class="bookmarklet-note">Then click it from any recipe page.</span>
   </aside>
-  <button id="floating-recipeboy" class="floating-recipeboy" type="button" aria-label="Customize your Recipeboy">
+  <button id="floating-recipeboy" class="floating-recipeboy" type="button" aria-label="Customize your Recipeboy" hidden>
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=26"></script>
+  <script type="module" src="app.js?v=27"></script>
 </body>
 </html>

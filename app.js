@@ -30,6 +30,7 @@ const el = {
   bookmarklet: document.getElementById('recipeboy-bookmarklet'),
   appMain: document.getElementById('app-main'),
   authGate: document.getElementById('auth-gate'),
+  authLoading: document.getElementById('auth-loading'),
   authMessage: document.getElementById('auth-message'),
   authControls: document.getElementById('auth-controls'),
   signIn: document.getElementById('sign-in-button'),
@@ -43,6 +44,7 @@ const el = {
 };
 
 let authClient = null;
+let pendingAuthUser;
 let loadedUserId = '';
 
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
@@ -1158,14 +1160,18 @@ function showSignedOut() {
   el.appMain.hidden = true;
   el.authControls.hidden = true;
   el.bookmarkletDock.hidden = true;
+  el.authLoading.hidden = true;
   el.authGate.hidden = false;
+  document.body.classList.remove('auth-pending');
   el.authMessage.textContent = 'Sign in to see and add recipes with your friends.';
   el.signIn.hidden = false;
 }
 
 async function showSignedIn(user) {
+  el.authLoading.hidden = true;
   el.authGate.hidden = true;
   el.appMain.hidden = false;
+  document.body.classList.remove('auth-pending');
   el.authControls.hidden = false;
   el.floatingRecipeboy.hidden = false;
   el.accountLabel.textContent = user.label;
@@ -1205,9 +1211,17 @@ window.addEventListener('hashchange', () => {
 
 try {
   syncCustomSelect(el.sort);
-  authClient = await initAuth({ onChange: (user) => { void handleAuthChange(user); } });
-  await handleAuthChange(authClient.user);
+  authClient = await initAuth({ onChange: (user) => {
+    if (!authClient) pendingAuthUser = user;
+    else void handleAuthChange(user);
+  } });
+  const initialUser = pendingAuthUser === undefined ? authClient.user : pendingAuthUser;
+  pendingAuthUser = undefined;
+  await handleAuthChange(initialUser);
 } catch (error) {
+  el.authLoading.hidden = true;
+  el.authGate.hidden = false;
+  document.body.classList.remove('auth-pending');
   el.authMessage.textContent = `${error.message} Refresh the page to try again.`;
   el.signIn.hidden = true;
 }

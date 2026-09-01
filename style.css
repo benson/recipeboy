@@ -88,6 +88,13 @@ h1 span { color: var(--red); display: block; margin-left: 48px; }
 main { width: min(1120px, calc(100% - 36px)); margin: 20px auto 72px; }
 
 .auth-gate { display: flex; align-items: center; gap: 24px; width: min(700px, calc(100% - 36px)); margin: 28px auto 82px; padding: 22px 28px 22px 20px; background: var(--white); border: 6px solid var(--navy); border-radius: 24px 24px 36px 24px; box-shadow: var(--shadow); }
+.auth-loading { display: flex; align-items: center; justify-content: center; gap: 15px; width: min(470px, calc(100% - 36px)); min-height: 112px; margin: 28px auto 82px; padding: 17px 23px; opacity: 0; background: var(--white); border: 5px solid var(--navy); border-radius: 20px 20px 30px 20px; box-shadow: 6px 6px 0 var(--yellow); animation: auth-loading-in 180ms ease 180ms forwards; }
+.auth-loading img { width: 72px; flex: none; animation: auth-loading-bob 900ms ease-in-out infinite alternate; }
+.auth-loading p { margin: 3px 0 0; color: var(--navy); font-size: 17px; font-weight: 900; }
+.auth-gate:not([hidden]), main:not([hidden]) { animation: auth-view-in 220ms ease both; }
+@keyframes auth-loading-in { to { opacity: 1; } }
+@keyframes auth-loading-bob { to { transform: translateY(-4px) rotate(2deg); } }
+@keyframes auth-view-in { from { opacity: 0; transform: translateY(5px); } }
 .auth-gate img { width: 150px; flex: none; filter: drop-shadow(5px 6px 0 rgba(16,42,90,.15)); }
 .auth-gate h2 { margin: 3px 0 8px; font-size: clamp(25px, 4vw, 38px); line-height: 1.05; }
 .auth-gate p { margin: 0 0 16px; color: #596885; }
@@ -481,6 +488,8 @@ footer { height: 12px; background: var(--navy); }
   .account-button #account-label { display: none; }
   .stats-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
+  .auth-loading { justify-content: flex-start; min-height: 96px; padding: 14px 18px; }
+  .auth-loading img { width: 62px; }
   .auth-gate img { width: 120px; }
   .auth-gate .primary-button { width: 100%; }
   .hero { min-height: 235px; align-items: flex-start; justify-content: flex-start; padding-top: 28px; }
@@ -543,4 +552,5 @@ footer { height: 12px; background: var(--navy); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  .auth-loading, .auth-loading img, .auth-gate:not([hidden]), main:not([hidden]) { animation: none; opacity: 1; transform: none; }
 }
