@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], lists: [], profile: null, stats: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
+const state = { recipes: [], lists: [], profile: null, stats: null, isSignedIn: false, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -32,6 +32,8 @@ const el = {
   authGate: document.getElementById('auth-gate'),
   authMessage: document.getElementById('auth-message'),
   authControls: document.getElementById('auth-controls'),
+  publicControls: document.getElementById('public-controls'),
+  publicSignIn: document.getElementById('public-sign-in-button'),
   signIn: document.getElementById('sign-in-button'),
   account: document.getElementById('account-button'),
   accountAvatar: document.getElementById('account-avatar'),
@@ -140,17 +142,18 @@ function safeUrl(value) {
 }
 
 async function api(path, options = {}) {
-  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const { allowAnonymous = false, ...fetchOptions } = options;
+  const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
   const request = async (token) => fetch(API + path, {
-    ...options,
+    ...fetchOptions,
     headers: {
-      ...(options.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+      ...(fetchOptions.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
   });
   let token = await authClient?.getToken();
-  if (!token) throw new Error('Sign in to use the shared recipe box.');
+  if (!token && !allowAnonymous) throw new Error('Sign in to use the shared recipe box.');
   let response = await request(token);
   if (response.status === 401) {
     token = await authClient?.getToken({ skipCache: true });
@@ -451,11 +454,14 @@ function cardTemplate(recipe) {
       <div class="card-contributor">${recipe.addedBy ? avatarTemplate(recipe.addedBy, 'avatar-tiny') : ''}<span><small>Added by</small><strong>${esc(addedBy || 'an early Recipeboy friend')}</strong></span></div>
       <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${esc(cookedBy)}"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${esc(cookedBy)}</strong></span></div>
     </div>
-    <div class="card-actions card-actions-three">
+    ${state.isSignedIn ? `<div class="card-actions card-actions-three">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
       <button data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
       <button data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>
-    </div>
+    </div>` : `<div class="card-actions card-actions-view-only">
+      <button data-open="${esc(recipe.id)}">View recipe</button>
+      <button data-sign-in>Sign in to save or cook</button>
+    </div>`}
   </article>`;
 }
 
@@ -586,7 +592,7 @@ function socialTemplate(recipe) {
         <p class="big-stars" aria-label="${esc(ratingSummary(recipe))}">${starText(Math.round(recipe.ratingAverage || 0))}</p>
         <p>${recipe.ratingCount || 0} rating${recipe.ratingCount === 1 ? '' : 's'}</p>
       </div>
-      <form class="review-form" data-review-form="${esc(recipe.id)}">
+      ${state.isSignedIn ? `<form class="review-form" data-review-form="${esc(recipe.id)}">
         <fieldset>
           <legend>Your rating</legend>
           <input type="hidden" name="rating" value="${selectedRating}">
@@ -603,7 +609,7 @@ function socialTemplate(recipe) {
           <button class="primary-button" type="submit">${selectedRating ? 'Update cook review' : 'Save cook review'}</button>
           ${selectedRating ? `<button class="text-button" type="button" data-remove-review="${esc(recipe.id)}">Remove mine</button>` : ''}
         </div>
-      </form>
+      </form>` : `<div class="viewer-social-cta"><span class="social-eyebrow">Want a seat?</span><h3>Join the tasting table</h3><p>Sign in to rate this recipe, leave a note, and add photos after you cook it.</p><button class="primary-button" type="button" data-sign-in>Sign in to join</button></div>`}
     </div>
     <div class="friend-columns">
       <div class="made-by-panel">
@@ -645,11 +651,11 @@ function detailTemplate(recipe) {
       <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
       <button class="action-button" data-share="${esc(recipe.id)}">Copy recipe link</button>
-      <button class="action-button" data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to lists' : 'Save to a list'}</button>
-      <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>
+      ${state.isSignedIn ? `<button class="action-button" data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to lists' : 'Save to a list'}</button>
+      <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, rate, or save</button>'}
       ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
       ${recipe.canEdit ? `<button class="action-button edit" data-edit-recipe="${esc(recipe.id)}">Edit recipe</button>` : ''}
-      <button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>
+      ${state.isSignedIn ? `<button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>` : ''}
     </div>
     <div class="recipe-columns">
       <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
@@ -657,7 +663,7 @@ function detailTemplate(recipe) {
     </div>
     <section class="recipe-photos" aria-label="Cooking photos">
       <div class="recipe-photos-heading"><div><span class="social-eyebrow">From the kitchen</span><h3>Cooking photos</h3></div></div>
-      ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption><button type="button" data-delete-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Remove this photo">×</button></figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
+      ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption>${state.isSignedIn ? `<button type="button" data-delete-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Remove this photo">×</button>` : ''}</figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
     </section>
     ${socialTemplate(recipe)}`;
 }
@@ -927,6 +933,10 @@ async function restoreRecipe(deletedRecipe) {
 
 async function submitRecipe(event) {
   event.preventDefault();
+  if (!state.isSignedIn) {
+    await authClient?.signIn();
+    return;
+  }
   const input = el.input.value.trim();
   if (!input) return;
   const button = el.form.querySelector('button[type="submit"]');
@@ -977,6 +987,10 @@ async function openStats() {
 }
 
 async function handleAction(event) {
+  if (event.target.closest('[data-sign-in]')) {
+    await authClient?.signIn();
+    return;
+  }
   const ratingButton = event.target.closest('[data-rating]');
   if (ratingButton) {
     const form = ratingButton.closest('[data-review-form]');
@@ -1148,7 +1162,10 @@ async function saveClippedRecipe() {
 
 async function loadSharedBox() {
   try {
-    const [recipeResult, listResult] = await Promise.all([api('/recipes'), api('/lists')]);
+    const [recipeResult, listResult] = await Promise.all([
+      api('/recipes', { allowAnonymous: !state.isSignedIn }),
+      state.isSignedIn ? api('/lists') : Promise.resolve({ lists: [] }),
+    ]);
     state.recipes = recipeResult.recipes || [];
     state.lists = listResult.lists || [];
     el.grid.classList.add('recipe-grid-hydrating');
@@ -1157,7 +1174,7 @@ async function loadSharedBox() {
     window.setTimeout(() => el.grid.classList.remove('recipe-grid-hydrating'), 360);
     const linkedRecipeId = recipeIdFromHash();
     if (linkedRecipeId) openRecipe(linkedRecipeId, false);
-    await saveClippedRecipe();
+    if (state.isSignedIn) await saveClippedRecipe();
   } catch (error) {
     el.grid.innerHTML = '';
     el.grid.classList.remove('recipe-grid-hydrating');
@@ -1169,31 +1186,40 @@ async function loadSharedBox() {
   }
 }
 
-function showSignedOut() {
+async function showSignedOut() {
   loadedUserId = '';
+  state.isSignedIn = false;
   state.recipes = [];
   state.lists = [];
   state.profile = null;
   prepareAppLoading();
-  el.appMain.inert = true;
+  document.body.classList.add('view-only');
+  el.appMain.hidden = false;
+  el.appMain.inert = false;
+  el.input.disabled = true;
+  el.form.querySelector('button[type="submit"] span').textContent = 'Sign in to add';
   el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
   el.floatingRecipeboy.hidden = true;
   if (el.dialog.open) el.dialog.close();
   if (el.editDialog.open) el.editDialog.close();
   if (el.statsDialog.open) el.statsDialog.close();
-  el.appMain.hidden = true;
   el.authControls.hidden = true;
+  el.publicControls.hidden = false;
   el.bookmarkletDock.hidden = true;
-  el.authGate.hidden = false;
-  el.authMessage.textContent = 'Sign in to see and add recipes with your friends.';
-  el.signIn.hidden = false;
+  el.authGate.hidden = true;
+  await loadSharedBox();
 }
 
 async function showSignedIn(user) {
+  state.isSignedIn = true;
+  document.body.classList.remove('view-only');
   if (loadedUserId !== user.id) prepareAppLoading();
   el.authGate.hidden = true;
   el.appMain.hidden = false;
   el.appMain.inert = false;
+  el.input.disabled = false;
+  el.form.querySelector('button[type="submit"] span').textContent = 'Normalize it!';
+  el.publicControls.hidden = true;
   el.accountLabel.textContent = user.label;
   el.account.title = 'Customize your Recipeboy';
   if (loadedUserId === user.id) return;
@@ -1220,6 +1246,7 @@ async function handleAuthChange(user) {
 }
 
 el.signIn.addEventListener('click', () => authClient?.signIn());
+el.publicSignIn.addEventListener('click', () => authClient?.signIn());
 el.account.addEventListener('click', openProfile);
 el.floatingRecipeboy.addEventListener('click', openProfile);
 window.addEventListener('hashchange', () => {

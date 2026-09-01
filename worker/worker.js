@@ -872,7 +872,7 @@ function rowToRecipe(row) {
 async function listRecipes(env, userId) {
   const { results } = await env.DB.prepare(`
     SELECT r.id, r.data_json, r.made_count, r.created_at,
-      1 AS can_edit,
+      (? IS NOT NULL) AS can_edit,
       r.created_by_user_id AS creator_user_id,
       creator.display_name AS creator_display_name,
       creator.avatar_json AS creator_avatar_json,
@@ -887,7 +887,7 @@ async function listRecipes(env, userId) {
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId, userId, userId, userId).all();
+  `).bind(userId, userId, userId, userId, userId).all();
   const recipes = results.map(rowToRecipe);
   if (!recipes.length) return recipes;
 
@@ -1266,6 +1266,9 @@ export default {
       if (request.method === 'GET' && path === '/') return json({ ok: true, service: 'recipeboy-api' });
       const publicPhotoMatch = path.match(/^\/photos\/(.+)$/);
       if (request.method === 'GET' && publicPhotoMatch) return serveRecipePhoto(decodeURIComponent(publicPhotoMatch[1]), env);
+      if (request.method === 'GET' && path === '/recipes' && !request.headers.get('Authorization')) {
+        return json({ recipes: await listRecipes(env, null) });
+      }
       let auth;
       try { auth = await authenticate(request, env); }
       catch { return json({ error: 'Sign in to use the shared recipe box.' }, 401); }

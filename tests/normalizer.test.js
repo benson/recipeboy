@@ -17,10 +17,30 @@ function signedClerkToken(privateKey, overrides = {}) {
   return `${unsigned}.${signBytes('RSA-SHA256', Buffer.from(unsigned), privateKey).toString('base64url')}`;
 }
 
-test('requires a signed-in account for recipe data', async () => {
-  const response = await worker.fetch(new Request('https://recipeboy.test/recipes'), {});
-  assert.equal(response.status, 401);
-  assert.match((await response.json()).error, /sign in/i);
+test('allows public recipe reads while keeping recipe writes signed in', async () => {
+  const env = { DB: { prepare(sql) {
+    const all = async (args = []) => {
+      if (sql.includes('SELECT r.id, r.data_json')) return { results: [{
+        id: 'recipe-1', data_json: JSON.stringify({ title: 'Soup', ingredients: [], instructions: [], tags: [] }),
+        made_count: 0, created_at: '2026-01-01T00:00:00.000Z', can_edit: args[0] !== null ? 1 : 0,
+        made_by_viewer: 0, rating_average: 0, rating_count: 0, viewer_rating: 0, viewer_review: '',
+      }] };
+      return { results: [] };
+    };
+    return { all, bind(...args) { return { all: () => all(args) }; } };
+  } } };
+  const response = await worker.fetch(new Request('https://recipeboy.test/recipes'), env);
+  assert.equal(response.status, 200);
+  const publicRecipes = (await response.json()).recipes;
+  assert.equal(publicRecipes.length, 1);
+  assert.equal(publicRecipes[0].canEdit, false);
+  assert.equal(publicRecipes[0].madeByViewer, false);
+
+  const writeResponse = await worker.fetch(new Request('https://recipeboy.test/recipes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'beans' }),
+  }), env);
+  assert.equal(writeResponse.status, 401);
+  assert.match((await writeResponse.json()).error, /sign in/i);
 });
 
 test('normalizes avatar choices to the supported Recipeboy palette', () => {

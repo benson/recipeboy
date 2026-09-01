@@ -28,11 +28,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=33">
+  <link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
   <header class="hero">
+    <div id="public-controls" class="public-controls" hidden>
+      <span>View-only</span>
+      <button id="public-sign-in-button" type="button">Sign in</button>
+    </div>
     <div id="auth-controls" class="auth-controls" hidden>
       <button id="account-button" class="account-button" type="button" title="Customize your Recipeboy">
         <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
@@ -179,6 +183,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=28"></script>
+  <script type="module" src="app.js?v=29"></script>
 </body>
 </html>
