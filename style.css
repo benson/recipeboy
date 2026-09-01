@@ -48,7 +48,7 @@ button { color: inherit; }
   border-bottom: 6px solid var(--navy);
 }
 
-.auth-controls, .public-controls { position: absolute; top: 14px; right: max(18px, calc((100vw - 1120px) / 2)); z-index: 6; display: flex; align-items: center; gap: 8px; }
+.auth-controls, .public-controls { position: absolute; top: 14px; right: max(18px, calc((100vw - 1360px) / 2)); z-index: 6; display: flex; align-items: center; gap: 8px; }
 .auth-controls:not([hidden]) { transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
 .public-controls { padding: 4px 5px 4px 11px; color: var(--navy); background: var(--white); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
 .public-controls button { min-height: 30px; padding: 4px 12px; color: var(--white); background: var(--blue); border: 0; border-radius: 999px; font-weight: 900; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
@@ -522,7 +522,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .activity-copy p { margin: 0; font-size: 14px; line-height: 1.35; }
 .activity-copy p strong { font-weight: 900; }
 .activity-copy button { max-width: 100%; padding: 0; overflow: hidden; color: var(--blue); background: none; border: 0; font: inherit; font-weight: 900; text-align: left; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; text-overflow: ellipsis; vertical-align: bottom; white-space: nowrap; cursor: pointer; }
-.activity-copy time { display: block; margin-top: 3px; color: #6b768c; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.activity-copy time { display: block; margin-top: 3px; color: #6b768c; font-size: 11px; font-weight: 800; }
 .activity-badge { align-self: center; min-width: 54px; padding: 5px 8px; color: var(--navy); background: var(--yellow); border: 2px solid var(--navy); border-radius: 999px; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-align: center; text-transform: uppercase; white-space: nowrap; }
 .activity-cooked .activity-badge { color: var(--white); background: var(--red); }
 .activity-rated .activity-badge { color: var(--white); background: var(--blue); }
