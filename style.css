@@ -11,6 +11,8 @@
 }
 
 * { box-sizing: border-box; }
+html, dialog { scrollbar-width: none; -ms-overflow-style: none; }
+html::-webkit-scrollbar, dialog::-webkit-scrollbar { width: 0; height: 0; display: none; }
 [hidden] { display: none !important; }
 
 body {

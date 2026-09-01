@@ -410,7 +410,7 @@ function cardTemplate(recipe) {
       <div class="card-rating ${recipe.ratingCount ? '' : 'unrated'}" aria-label="${esc(ratingSummary(recipe))}"><span aria-hidden="true">★</span><strong>${recipe.ratingCount ? Number(recipe.ratingAverage).toFixed(1) : 'New'}</strong><small>${recipe.ratingCount ? `${recipe.ratingCount} rating${recipe.ratingCount === 1 ? '' : 's'}` : 'Not rated yet'}</small></div>
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
       <div class="card-contributor">${recipe.addedBy ? avatarTemplate(recipe.addedBy, 'avatar-tiny') : ''}<span><small>Added by</small><strong>${esc(addedBy || 'an early Recipeboy friend')}</strong></span></div>
-      <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${recipe.madeCount || 0} friends"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${makers.length ? `${recipe.madeCount} friend${recipe.madeCount === 1 ? '' : 's'}` : 'Nobody yet'}</strong></span></div>
+      <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${recipe.madeCount || 0} friends"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${makers.length ? `${recipe.madeCount} friend${recipe.madeCount === 1 ? '' : 's'}` : (recipe.madeCount ? `${recipe.madeCount} earlier cook${recipe.madeCount === 1 ? '' : 's'}` : 'Nobody yet')}</strong></span></div>
     </div>
     <div class="card-actions card-actions-three">
       <button data-copy="${esc(recipe.id)}">Copy list</button>
@@ -667,7 +667,7 @@ function profileTemplate(profile) {
   const avatar = normalizedClientAvatar(profile.avatar || {});
   const backgrounds = [
     ['sunshine', 'Sunshine', '#ffd43b'], ['tomato', 'Tomato', '#ff6975'], ['blueberry', 'Blueberry', '#72a9ff'], ['mint', 'Mint', '#9cdb88'],
-    ['grape', 'Grape', '#c9a7ff'], ['peach', 'Peach', '#ffb477'], ['aqua', 'Aqua', '#70d6d0'], ['bubblegum', 'Bubblegum', '#f7a8d9'],
+    ['grape', 'Grape', '#c9a7ff'], ['peach', 'Peach', '#ffb477'], ['aqua', 'Aqua', '#70d6d0'], ['bubblegum', 'Bubble gum', '#f7a8d9'],
   ];
   return `<div class="profile-hero">
       <div id="profile-avatar-preview" class="profile-avatar-preview">${avatarTemplate(profile, 'avatar-large')}</div>
