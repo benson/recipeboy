@@ -30,7 +30,6 @@ const el = {
   bookmarklet: document.getElementById('recipeboy-bookmarklet'),
   appMain: document.getElementById('app-main'),
   authGate: document.getElementById('auth-gate'),
-  authLoading: document.getElementById('auth-loading'),
   authMessage: document.getElementById('auth-message'),
   authControls: document.getElementById('auth-controls'),
   signIn: document.getElementById('sign-in-button'),
@@ -50,6 +49,23 @@ let loadedUserId = '';
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
+
+const SKELETON_CARD = '<article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-source"></i><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>';
+
+function prepareAppLoading() {
+  el.appMain.classList.add('app-loading');
+  el.appMain.setAttribute('aria-busy', 'true');
+  el.grid.classList.remove('recipe-grid-hydrating');
+  el.grid.innerHTML = SKELETON_CARD.repeat(3);
+  el.tagFilters.innerHTML = '';
+  el.count.textContent = 'Opening the shared box…';
+  el.empty.hidden = true;
+}
+
+function finishAppLoading() {
+  el.appMain.classList.remove('app-loading');
+  el.appMain.setAttribute('aria-busy', 'false');
+}
 
 const AVATAR_DEFAULT = { background: 'sunshine', character: 'classic', flavor: 'savory' };
 const AVATAR_CHARACTERS = {
@@ -1135,11 +1151,17 @@ async function loadSharedBox() {
     const [recipeResult, listResult] = await Promise.all([api('/recipes'), api('/lists')]);
     state.recipes = recipeResult.recipes || [];
     state.lists = listResult.lists || [];
+    el.grid.classList.add('recipe-grid-hydrating');
     render();
+    finishAppLoading();
+    window.setTimeout(() => el.grid.classList.remove('recipe-grid-hydrating'), 360);
     const linkedRecipeId = recipeIdFromHash();
     if (linkedRecipeId) openRecipe(linkedRecipeId, false);
     await saveClippedRecipe();
   } catch (error) {
+    el.grid.innerHTML = '';
+    el.grid.classList.remove('recipe-grid-hydrating');
+    finishAppLoading();
     el.count.textContent = error.message || 'Couldn’t reach the shared box';
     el.empty.hidden = false;
     el.empty.querySelector('h3').textContent = 'Recipeboy is taking a snack break.';
@@ -1152,6 +1174,8 @@ function showSignedOut() {
   state.recipes = [];
   state.lists = [];
   state.profile = null;
+  prepareAppLoading();
+  el.appMain.inert = true;
   el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
   el.floatingRecipeboy.hidden = true;
   if (el.dialog.open) el.dialog.close();
@@ -1160,23 +1184,18 @@ function showSignedOut() {
   el.appMain.hidden = true;
   el.authControls.hidden = true;
   el.bookmarkletDock.hidden = true;
-  el.authLoading.hidden = true;
   el.authGate.hidden = false;
-  document.body.classList.remove('auth-pending');
   el.authMessage.textContent = 'Sign in to see and add recipes with your friends.';
   el.signIn.hidden = false;
 }
 
 async function showSignedIn(user) {
-  el.authLoading.hidden = true;
+  if (loadedUserId !== user.id) prepareAppLoading();
   el.authGate.hidden = true;
   el.appMain.hidden = false;
-  document.body.classList.remove('auth-pending');
-  el.authControls.hidden = false;
-  el.floatingRecipeboy.hidden = false;
+  el.appMain.inert = false;
   el.accountLabel.textContent = user.label;
   el.account.title = 'Customize your Recipeboy';
-  el.bookmarkletDock.hidden = bookmarkletWasDismissed();
   if (loadedUserId === user.id) return;
   loadedUserId = user.id;
   state.recipes = [];
@@ -1189,6 +1208,9 @@ async function showSignedIn(user) {
     state.profile = { displayName: user.label, avatar: AVATAR_DEFAULT };
     renderAccountProfile();
   }
+  el.authControls.hidden = false;
+  el.floatingRecipeboy.hidden = false;
+  el.bookmarkletDock.hidden = bookmarkletWasDismissed();
   await loadSharedBox();
 }
 
@@ -1219,9 +1241,9 @@ try {
   pendingAuthUser = undefined;
   await handleAuthChange(initialUser);
 } catch (error) {
-  el.authLoading.hidden = true;
+  el.appMain.hidden = true;
+  el.appMain.inert = true;
   el.authGate.hidden = false;
-  document.body.classList.remove('auth-pending');
   el.authMessage.textContent = `${error.message} Refresh the page to try again.`;
   el.signIn.hidden = true;
 }

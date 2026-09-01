@@ -28,9 +28,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
-<body class="auth-pending">
+<body>
   <div class="top-stripe" aria-hidden="true"></div>
   <header class="hero">
     <div id="auth-controls" class="auth-controls" hidden>
@@ -50,11 +50,6 @@
     </div>
   </header>
 
-  <section id="auth-loading" class="auth-loading" role="status" aria-live="polite">
-    <img src="assets/recipeboy-mascot.svg" alt="" aria-hidden="true">
-    <div><span class="auth-eyebrow">Recipeboy is setting the table</span><p>Opening your recipe box…</p></div>
-  </section>
-
   <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title" hidden>
     <img src="assets/recipeboy-mascot.svg" alt="" aria-hidden="true">
     <div>
@@ -65,7 +60,7 @@
     </div>
   </section>
 
-  <main id="app-main" hidden>
+  <main id="app-main" class="app-loading" aria-busy="true" inert>
     <section class="feeder" aria-labelledby="feed-title">
       <div class="feeder-heading">
         <h2 id="feed-title">Feed Recipeboy</h2>
@@ -121,7 +116,11 @@
 
       <div id="tag-filters" class="tag-filters" aria-label="Filter recipes by tag"></div>
 
-      <div id="recipe-grid" class="recipe-grid" aria-live="polite"></div>
+      <div id="recipe-grid" class="recipe-grid" aria-live="polite">
+        <article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-source"></i><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>
+        <article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-source"></i><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>
+        <article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-source"></i><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>
+      </div>
       <div id="empty-state" class="empty-state" hidden>
         <img src="assets/recipeboy-mascot.svg" alt="">
         <div>
@@ -180,6 +179,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=27"></script>
+  <script type="module" src="app.js?v=28"></script>
 </body>
 </html>
