@@ -411,9 +411,8 @@ function cardTemplate(recipe) {
   const allMakers = recipe.makers || [];
   const makers = allMakers.slice(0, 4);
   const makerNames = allMakers.map((maker) => maker.displayName).filter(Boolean);
-  const unnamedCooks = Math.max(0, Number(recipe.madeCount || 0) - makerNames.length);
   const cookedBy = makerNames.length
-    ? `${makerNames.join(', ')}${unnamedCooks ? ` + ${unnamedCooks} earlier` : ''}`
+    ? makerNames.join(', ')
     : (recipe.madeCount ? `${recipe.madeCount} earlier cook${recipe.madeCount === 1 ? '' : 's'}` : 'Nobody yet');
   const firstPhoto = (recipe.photos || [])[0];
   const addedBy = recipe.addedBy?.displayName;
