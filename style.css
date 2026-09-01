@@ -256,14 +256,14 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .detail-hero p { max-width: 620px; margin-bottom: 0; }
 .detail-meta { display: flex; flex-wrap: wrap; gap: 5px 0; margin-top: 17px; color: #4f5870; font-size: 13px; font-weight: 900; }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
-.detail-actions { display: flex; flex-wrap: wrap; gap: 12px; padding: 22px 30px 0; }
-.recipe-scale { display: inline-flex; align-items: center; min-height: 46px; overflow: hidden; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; box-shadow: 4px 4px 0 var(--navy); }
-.recipe-scale > span { padding: 0 10px 0 14px; color: #66718a; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
-.recipe-scale button { align-self: stretch; width: 38px; color: var(--navy); background: var(--yellow); border: 0; border-left: 3px solid var(--navy); font-size: 21px; font-weight: 900; cursor: pointer; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 9px; padding: 20px 30px 0; }
+.recipe-scale { display: inline-flex; align-items: center; min-height: 42px; overflow: hidden; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; box-shadow: 4px 4px 0 var(--navy); }
+.recipe-scale > span { padding: 0 9px 0 13px; color: #66718a; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.recipe-scale button { align-self: stretch; width: 35px; color: var(--navy); background: var(--yellow); border: 0; border-left: 3px solid var(--navy); font-size: 20px; font-weight: 900; cursor: pointer; }
 .recipe-scale button:last-child { border-right: 0; border-left: 3px solid var(--navy); }
 .recipe-scale button:disabled { color: #9aa2b2; background: #eee9dc; cursor: default; }
-.recipe-scale strong { min-width: 47px; padding: 0 7px; text-align: center; }
-.action-button { padding: 10px 16px; background: var(--white); }
+.recipe-scale strong { align-self: stretch; display: grid; place-items: center; min-width: 43px; padding: 0 6px; border-left: 3px solid var(--navy); text-align: center; }
+.action-button { padding: 8px 13px; background: var(--white); }
 .action-button.made { color: var(--white); background: var(--red); }
 .action-button.made:disabled { color: var(--navy); background: #bce3ac; box-shadow: none; cursor: default; transform: none; }
 .action-button.delete { margin-left: auto; color: #8c2630; background: transparent; border-color: #8c2630; box-shadow: none; }
