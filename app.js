@@ -4,7 +4,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
   : 'https://recipeboy-api.bensonperry.workers.dev';
 
-const state = { recipes: [], lists: [], profile: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, listRecipeId: null, confirmDeleteId: null };
+const state = { recipes: [], lists: [], profile: null, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, confirmDeleteId: null };
 const el = {
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
@@ -22,6 +22,8 @@ const el = {
   profileContent: document.getElementById('profile-content'),
   listDialog: document.getElementById('list-dialog'),
   listContent: document.getElementById('list-content'),
+  editDialog: document.getElementById('edit-dialog'),
+  editContent: document.getElementById('edit-content'),
   toast: document.getElementById('toast'),
   bookmarkletDock: document.getElementById('bookmarklet-dock'),
   bookmarkletDismiss: document.getElementById('bookmarklet-dismiss'),
@@ -188,8 +190,60 @@ function ingredientText(ingredient) {
   return [ingredient.amount, ingredient.unit, ingredient.item].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 }
 
-function shoppingList(recipe) {
-  return recipe.ingredients.map((ingredient) => `☐ ${ingredientText(ingredient)}`).join('\n');
+const FRACTION_VALUES = { '¼': .25, '½': .5, '¾': .75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': .125, '⅜': .375, '⅝': .625, '⅞': .875 };
+
+function numericTokenValue(token) {
+  if (FRACTION_VALUES[token]) return FRACTION_VALUES[token];
+  if (/^\d+\s+\d+\/\d+$/.test(token)) {
+    const [whole, fraction] = token.split(/\s+/);
+    const [top, bottom] = fraction.split('/').map(Number);
+    return Number(whole) + top / bottom;
+  }
+  if (/^\d+\/\d+$/.test(token)) {
+    const [top, bottom] = token.split('/').map(Number);
+    return top / bottom;
+  }
+  return Number(token);
+}
+
+function friendlyNumber(value) {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 24) / 24;
+  if (Math.abs(rounded - Math.round(rounded)) < .001) return String(Math.round(rounded));
+  const whole = Math.floor(rounded);
+  const fraction = rounded - whole;
+  const choices = [[1 / 8, '⅛'], [1 / 4, '¼'], [1 / 3, '⅓'], [3 / 8, '⅜'], [1 / 2, '½'], [5 / 8, '⅝'], [2 / 3, '⅔'], [3 / 4, '¾'], [7 / 8, '⅞']];
+  const closest = choices.reduce((best, choice) => Math.abs(choice[0] - fraction) < Math.abs(best[0] - fraction) ? choice : best, choices[0]);
+  if (Math.abs(closest[0] - fraction) > .045) return String(Math.round(rounded * 100) / 100);
+  return `${whole || ''}${whole ? ' ' : ''}${closest[1]}`;
+}
+
+function scaleAmount(amount, scale = 1) {
+  if (scale === 1 || !amount) return String(amount || '');
+  return String(amount).replace(/\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]/g, (token) => friendlyNumber(numericTokenValue(token) * scale));
+}
+
+function scaleYield(value, scale = 1) {
+  if (scale === 1 || !value) return String(value || '');
+  let count = 0;
+  let firstEnd = -1;
+  const source = String(value);
+  return source.replace(/\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]/g, (token, offset) => {
+    const isFirst = count === 0;
+    const isJoinedRange = count === 1 && /^\s*(?:to|[-–—])\s*$/i.test(source.slice(firstEnd, offset));
+    count += 1;
+    if (!isFirst && !isJoinedRange) return token;
+    if (isFirst) firstEnd = offset + token.length;
+    return friendlyNumber(numericTokenValue(token) * scale);
+  });
+}
+
+function scaledIngredientText(ingredient, scale = 1) {
+  return [scaleAmount(ingredient.amount, scale), ingredient.unit, ingredient.item].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function shoppingList(recipe, scale = 1) {
+  return recipe.ingredients.map((ingredient) => `☐ ${scaledIngredientText(ingredient, scale)}`).join('\n');
 }
 
 function recipePermalink(id) {
@@ -203,7 +257,9 @@ function recipeIdFromHash() {
 }
 
 async function copyShoppingList(recipe) {
-  const text = `${recipe.title}\n${shoppingList(recipe)}`;
+  const scale = state.activeId === recipe.id ? state.activeScale : 1;
+  const scaleNote = scale === 1 ? '' : ` (${friendlyNumber(scale)}×)`;
+  const text = `${recipe.title}${scaleNote}\n${shoppingList(recipe, scale)}`;
   await navigator.clipboard.writeText(text);
   showToast('Shopping list copied!');
 }
@@ -412,8 +468,9 @@ function socialTemplate(recipe) {
 
 function detailTemplate(recipe) {
   const sourceUrl = safeUrl(recipe.sourceUrl);
+  const scale = state.activeScale || 1;
   const ingredients = recipe.ingredients.map((ingredient) => {
-    const quantity = [ingredient.amount, ingredient.unit].filter(Boolean).join(' ');
+    const quantity = [scaleAmount(ingredient.amount, scale), ingredient.unit].filter(Boolean).join(' ');
     return `<li><strong class="ingredient-name">${esc(ingredient.item)}</strong>${quantity ? `<span class="ingredient-quantity">${esc(quantity)}</span>` : ''}</li>`;
   }).join('');
   const steps = recipe.instructions.map((step) => `<li>${esc(step)}</li>`).join('');
@@ -424,16 +481,18 @@ function detailTemplate(recipe) {
       ${recipe.description ? `<p>${esc(recipe.description)}</p>` : ''}
       <div class="detail-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
-        ${recipe.yield ? `<span class="meta-item">♨ ${esc(recipe.yield)}</span>` : ''}
+        ${recipe.yield ? `<span class="meta-item">♨ ${esc(scaleYield(recipe.yield, scale))}</span>` : ''}
       </div>
       ${(recipe.tags || []).length ? `<div class="detail-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="detail-actions">
+      <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
       <button class="action-button" data-copy="${esc(recipe.id)}">Copy shopping list</button>
       <button class="action-button" data-share="${esc(recipe.id)}">Copy recipe link</button>
       <button class="action-button" data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to lists' : 'Save to a list'}</button>
       <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You made this!' : 'I made this!'} · ${recipe.madeCount || 0}</button>
       ${sourceUrl ? `<a class="action-button source-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Original recipe ↗</a>` : ''}
+      ${recipe.canEdit ? `<button class="action-button edit" data-edit-recipe="${esc(recipe.id)}">Edit recipe</button>` : ''}
       <button class="action-button delete ${state.confirmDeleteId === recipe.id ? 'confirm' : ''}" data-delete="${esc(recipe.id)}">${state.confirmDeleteId === recipe.id ? 'Tap again to delete' : 'Delete recipe'}</button>
     </div>
     <div class="recipe-columns">
@@ -447,6 +506,7 @@ function openRecipe(id, updateHash = true) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   state.activeId = id;
+  state.activeScale = 1;
   state.confirmDeleteId = null;
   el.dialogContent.innerHTML = detailTemplate(recipe);
   el.dialog.showModal();
@@ -459,6 +519,74 @@ function refreshDialog() {
   if (!state.activeId || !el.dialog.open) return;
   const recipe = state.recipes.find((item) => item.id === state.activeId);
   if (recipe) el.dialogContent.innerHTML = detailTemplate(recipe);
+}
+
+function adjustRecipeScale(direction) {
+  const scales = [.5, 1, 1.5, 2, 3, 4];
+  const current = Math.max(0, scales.indexOf(state.activeScale));
+  state.activeScale = scales[Math.max(0, Math.min(scales.length - 1, current + direction))];
+  refreshDialog();
+}
+
+function editRecipeTemplate(recipe) {
+  const ingredients = recipe.ingredients.map(ingredientText).join('\n');
+  const instructions = recipe.instructions.join('\n');
+  return `<div class="edit-hero"><span class="social-eyebrow">Tidy the keeper</span><h2>Edit recipe</h2><p>These changes update the shared recipe for everyone.</p></div>
+    <form id="recipe-edit-form" class="recipe-edit-form" data-edit-id="${esc(recipe.id)}">
+      <label class="edit-wide">Recipe name<input name="title" maxlength="160" required value="${esc(recipe.title)}"></label>
+      <label class="edit-wide">Description<textarea name="description" rows="3" maxlength="1000" placeholder="What makes this one worth keeping?">${esc(recipe.description || '')}</textarea></label>
+      <div class="edit-small-fields">
+        <label>Yield<input name="yield" maxlength="100" value="${esc(recipe.yield || '')}" placeholder="Serves 4"></label>
+        <label>Prep minutes<input name="prepMinutes" type="number" min="0" max="10080" value="${Number(recipe.prepMinutes || 0)}"></label>
+        <label>Cook minutes<input name="cookMinutes" type="number" min="0" max="10080" value="${Number(recipe.cookMinutes || 0)}"></label>
+      </div>
+      <label class="edit-wide">Tags <span>comma separated</span><input name="tags" maxlength="500" value="${esc((recipe.tags || []).join(', '))}" placeholder="weeknight, spicy, vegetarian"></label>
+      <div class="edit-columns">
+        <label>Ingredients <span>one per line</span><textarea name="ingredients" rows="12" required>${esc(ingredients)}</textarea></label>
+        <label>Instructions <span>one step per line</span><textarea name="instructions" rows="12" required>${esc(instructions)}</textarea></label>
+      </div>
+      <div class="edit-actions"><button class="primary-button" type="submit">Save recipe</button><button class="action-button" type="button" data-cancel-edit>Cancel</button></div>
+    </form>`;
+}
+
+function openRecipeEditor(id) {
+  const recipe = state.recipes.find((item) => item.id === id && item.canEdit);
+  if (!recipe) return showToast('Only the friend who added this recipe can edit it.');
+  el.editContent.innerHTML = editRecipeTemplate(recipe);
+  el.editDialog.showModal();
+}
+
+async function saveRecipeEdit(event) {
+  event.preventDefault();
+  const form = event.target;
+  const id = form.dataset.editId;
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
+  const data = new FormData(form);
+  const lines = (name) => String(data.get(name) || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const result = await api(`/recipes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: data.get('title'),
+        description: data.get('description'),
+        yield: data.get('yield'),
+        prepMinutes: data.get('prepMinutes'),
+        cookMinutes: data.get('cookMinutes'),
+        tags: String(data.get('tags') || '').split(',').map((tag) => tag.trim()).filter(Boolean),
+        ingredients: lines('ingredients'),
+        instructions: lines('instructions'),
+      }),
+    });
+    Object.assign(recipe, result.recipe);
+    el.editDialog.close();
+    render();
+    refreshDialog();
+    showToast('Recipe tidied and saved!');
+  } catch (error) { showToast(error.message); }
+  finally { button.disabled = false; }
 }
 
 function profileTemplate(profile) {
@@ -649,6 +777,10 @@ async function handleAction(event) {
   }
   const removeReviewButton = event.target.closest('[data-remove-review]');
   if (removeReviewButton) return removeReview(removeReviewButton.dataset.removeReview);
+  const scaleButton = event.target.closest('[data-scale-step]');
+  if (scaleButton) return adjustRecipeScale(Number(scaleButton.dataset.scaleStep));
+  const editButton = event.target.closest('[data-edit-recipe]');
+  if (editButton) return openRecipeEditor(editButton.dataset.editRecipe);
   const copyButton = event.target.closest('[data-copy]');
   if (copyButton) {
     const recipe = state.recipes.find((item) => item.id === copyButton.dataset.copy);
@@ -684,6 +816,7 @@ document.getElementById('dialog-close').addEventListener('click', () => el.dialo
 el.dialog.addEventListener('click', (event) => { if (event.target === el.dialog) el.dialog.close(); });
 el.dialog.addEventListener('close', () => {
   state.activeId = null;
+  state.activeScale = 1;
   state.confirmDeleteId = null;
   if (location.hash.startsWith('#recipe=')) history.replaceState(null, '', `${location.pathname}${location.search}`);
 });
@@ -703,6 +836,11 @@ el.profileDialog.addEventListener('submit', (event) => { if (event.target.id ===
 el.profileDialog.addEventListener('click', (event) => {
   if (event.target.closest('#clerk-account-button')) authClient?.openAccount();
 });
+document.getElementById('edit-close').addEventListener('click', () => el.editDialog.close());
+el.editDialog.addEventListener('click', (event) => {
+  if (event.target === el.editDialog || event.target.closest('[data-cancel-edit]')) el.editDialog.close();
+});
+el.editDialog.addEventListener('submit', (event) => { if (event.target.id === 'recipe-edit-form') void saveRecipeEdit(event); });
 document.getElementById('list-close').addEventListener('click', () => el.listDialog.close());
 el.listDialog.addEventListener('click', (event) => {
   if (event.target === el.listDialog || event.target.closest('[data-list-done]')) el.listDialog.close();
@@ -766,6 +904,7 @@ function showSignedOut() {
   state.profile = null;
   el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
   if (el.dialog.open) el.dialog.close();
+  if (el.editDialog.open) el.editDialog.close();
   el.appMain.hidden = true;
   el.authControls.hidden = true;
   el.bookmarkletDock.hidden = true;

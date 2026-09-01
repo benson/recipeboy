@@ -28,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -137,6 +137,13 @@
     </div>
   </dialog>
 
+  <dialog id="edit-dialog" class="edit-dialog">
+    <div class="dialog-shell edit-shell">
+      <button id="edit-close" class="close-button" aria-label="Close recipe editor">×</button>
+      <div id="edit-content"></div>
+    </div>
+  </dialog>
+
   <dialog id="list-dialog" class="list-dialog">
     <div class="dialog-shell list-shell">
       <button id="list-close" class="close-button" aria-label="Close recipe lists">×</button>
@@ -157,6 +164,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </div>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>

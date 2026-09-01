@@ -859,12 +859,14 @@ function rowToRecipe(row) {
     makers: [],
     reviews: [],
     createdAt: row.created_at,
+    canEdit: Boolean(row.can_edit),
   };
 }
 
 async function listRecipes(env, userId) {
   const { results } = await env.DB.prepare(`
     SELECT r.id, r.data_json, r.made_count, r.created_at,
+      (r.created_by_user_id = ? OR r.created_by_user_id IS NULL) AS can_edit,
       EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer,
       COALESCE((SELECT AVG(rr.rating) FROM recipe_reviews rr WHERE rr.recipe_id = r.id), 0) AS rating_average,
       (SELECT COUNT(*) FROM recipe_reviews rr WHERE rr.recipe_id = r.id) AS rating_count,
@@ -874,7 +876,7 @@ async function listRecipes(env, userId) {
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId, userId, userId).all();
+  `).bind(userId, userId, userId, userId).all();
   const recipes = results.map(rowToRecipe);
   if (!recipes.length) return recipes;
 
@@ -953,7 +955,7 @@ async function createRecipe(request, env, userId) {
   const createdAt = new Date().toISOString();
   await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
     .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt, userId).run();
-  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, createdAt } }, 201);
+  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, ratingAverage: 0, ratingCount: 0, viewerRating: 0, viewerReview: '', makers: [], reviews: [], createdAt, canEdit: true } }, 201);
 }
 
 async function markMade(id, env, userId) {
@@ -1015,6 +1017,44 @@ async function saveReview(id, request, env, userId) {
 async function deleteReview(id, env, userId) {
   await env.DB.prepare('DELETE FROM recipe_reviews WHERE recipe_id = ? AND user_id = ?').bind(id, userId).run();
   return json(await recipeReviewSummary(id, env, userId));
+}
+
+async function updateRecipe(id, request, env, userId) {
+  const row = await env.DB.prepare('SELECT data_json FROM recipes WHERE id = ? AND (created_by_user_id = ? OR created_by_user_id IS NULL) AND deleted_at IS NULL').bind(id, userId).first();
+  if (!row) return json({ error: 'Only the friend who added this recipe can edit it.' }, 403);
+  let body;
+  try { body = await readJsonRequest(request); }
+  catch (error) { return json({ error: error.message }, error.status || 400); }
+  let original;
+  try { original = JSON.parse(row.data_json); } catch { original = {}; }
+  const title = cleanText(body.title, 160);
+  if (!title) return json({ error: 'Every recipe needs a title.' }, 400);
+  const ingredients = toArray(body.ingredients).slice(0, 200)
+    .map((item) => cleanText(item, 500)).filter(Boolean).map(parseIngredient).filter((item) => item.item);
+  const instructions = toArray(body.instructions).slice(0, 100)
+    .map((item) => cleanText(item, 5000)).filter(Boolean);
+  if (!ingredients.length) return json({ error: 'Add at least one ingredient.' }, 400);
+  if (!instructions.length) return json({ error: 'Add at least one instruction.' }, 400);
+  const minutes = (value) => Math.max(0, Math.min(10_080, Math.round(Number(value) || 0)));
+  const prepMinutes = minutes(body.prepMinutes);
+  const cookMinutes = minutes(body.cookMinutes);
+  const tags = toArray(body.tags).flatMap((tag) => String(tag).split(','))
+    .map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean).slice(0, 16);
+  const recipe = withDerivedTags({
+    ...original,
+    title,
+    description: cleanText(body.description, 1000),
+    yield: cleanText(body.yield, 100),
+    prepMinutes,
+    cookMinutes,
+    totalMinutes: prepMinutes + cookMinutes,
+    ingredients,
+    instructions,
+    tags,
+  });
+  await env.DB.prepare('UPDATE recipes SET title = ?, data_json = ?, created_by_user_id = COALESCE(created_by_user_id, ?) WHERE id = ? AND (created_by_user_id = ? OR created_by_user_id IS NULL)')
+    .bind(recipe.title, JSON.stringify(recipe), userId, id, userId).run();
+  return json({ recipe: { id, ...recipe, canEdit: true } });
 }
 
 async function deleteRecipe(id, env) {
@@ -1157,6 +1197,10 @@ export default {
         return limited || restoreRecipe(restoreMatch[1], env);
       }
       const recipeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)$/);
+      if (request.method === 'PUT' && recipeMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before tidying more recipes.');
+        return limited || updateRecipe(recipeMatch[1], request, env, auth.userId);
+      }
       if (request.method === 'DELETE' && recipeMatch) {
         const limited = await rateLimit(request, env.DELETE_RATE_LIMITER, 'Give Recipeboy a minute before deleting more recipes.');
         return limited || deleteRecipe(recipeMatch[1], env);
