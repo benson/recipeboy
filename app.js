@@ -550,8 +550,8 @@ function editRecipeTemplate(recipe) {
 }
 
 function openRecipeEditor(id) {
-  const recipe = state.recipes.find((item) => item.id === id && item.canEdit);
-  if (!recipe) return showToast('Only the friend who added this recipe can edit it.');
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
   el.editContent.innerHTML = editRecipeTemplate(recipe);
   el.editDialog.showModal();
 }

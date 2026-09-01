@@ -866,7 +866,7 @@ function rowToRecipe(row) {
 async function listRecipes(env, userId) {
   const { results } = await env.DB.prepare(`
     SELECT r.id, r.data_json, r.made_count, r.created_at,
-      (r.created_by_user_id = ? OR r.created_by_user_id IS NULL) AS can_edit,
+      1 AS can_edit,
       EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer,
       COALESCE((SELECT AVG(rr.rating) FROM recipe_reviews rr WHERE rr.recipe_id = r.id), 0) AS rating_average,
       (SELECT COUNT(*) FROM recipe_reviews rr WHERE rr.recipe_id = r.id) AS rating_count,
@@ -876,7 +876,7 @@ async function listRecipes(env, userId) {
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId, userId, userId, userId).all();
+  `).bind(userId, userId, userId).all();
   const recipes = results.map(rowToRecipe);
   if (!recipes.length) return recipes;
 
@@ -1020,8 +1020,8 @@ async function deleteReview(id, env, userId) {
 }
 
 async function updateRecipe(id, request, env, userId) {
-  const row = await env.DB.prepare('SELECT data_json FROM recipes WHERE id = ? AND (created_by_user_id = ? OR created_by_user_id IS NULL) AND deleted_at IS NULL').bind(id, userId).first();
-  if (!row) return json({ error: 'Only the friend who added this recipe can edit it.' }, 403);
+  const row = await env.DB.prepare('SELECT data_json FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+  if (!row) return json({ error: 'Recipe not found.' }, 404);
   let body;
   try { body = await readJsonRequest(request); }
   catch (error) { return json({ error: error.message }, error.status || 400); }
@@ -1052,8 +1052,8 @@ async function updateRecipe(id, request, env, userId) {
     instructions,
     tags,
   });
-  await env.DB.prepare('UPDATE recipes SET title = ?, data_json = ?, created_by_user_id = COALESCE(created_by_user_id, ?) WHERE id = ? AND (created_by_user_id = ? OR created_by_user_id IS NULL)')
-    .bind(recipe.title, JSON.stringify(recipe), userId, id, userId).run();
+  await env.DB.prepare('UPDATE recipes SET title = ?, data_json = ? WHERE id = ?')
+    .bind(recipe.title, JSON.stringify(recipe), id).run();
   return json({ recipe: { id, ...recipe, canEdit: true } });
 }
 
