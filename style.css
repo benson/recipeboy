@@ -565,6 +565,8 @@ footer { height: 12px; background: var(--navy); }
   .account-button { min-height: 38px; padding-right: 6px; }
   .account-button #account-label { display: none; }
   .stats-button, .feed-button { min-height: 38px; padding: 6px 8px; font-size: 11px; }
+  .stats-button { font-size: 0; }
+  .stats-button::after { content: "Stats"; font-size: 11px; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
   .auth-gate img { width: 120px; }
   .auth-gate .primary-button { width: 100%; }
