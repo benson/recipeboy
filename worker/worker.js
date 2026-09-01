@@ -1038,6 +1038,7 @@ async function updateRecipe(id, request, env, userId) {
   const minutes = (value) => Math.max(0, Math.min(10_080, Math.round(Number(value) || 0)));
   const prepMinutes = minutes(body.prepMinutes);
   const cookMinutes = minutes(body.cookMinutes);
+  const totalMinutes = minutes(body.totalMinutes) || prepMinutes + cookMinutes;
   const tags = toArray(body.tags).flatMap((tag) => String(tag).split(','))
     .map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean).slice(0, 16);
   const recipe = withDerivedTags({
@@ -1047,7 +1048,7 @@ async function updateRecipe(id, request, env, userId) {
     yield: cleanText(body.yield, 100),
     prepMinutes,
     cookMinutes,
-    totalMinutes: prepMinutes + cookMinutes,
+    totalMinutes,
     ingredients,
     instructions,
     tags,

@@ -539,6 +539,7 @@ function editRecipeTemplate(recipe) {
         <label>Yield<input name="yield" maxlength="100" value="${esc(recipe.yield || '')}" placeholder="Serves 4"></label>
         <label>Prep minutes<input name="prepMinutes" type="number" min="0" max="10080" value="${Number(recipe.prepMinutes || 0)}"></label>
         <label>Cook minutes<input name="cookMinutes" type="number" min="0" max="10080" value="${Number(recipe.cookMinutes || 0)}"></label>
+        <label>Total minutes<input name="totalMinutes" type="number" min="0" max="10080" value="${Number(recipe.totalMinutes || 0)}"></label>
       </div>
       <label class="edit-wide">Tags <span>comma separated</span><input name="tags" maxlength="500" value="${esc((recipe.tags || []).join(', '))}" placeholder="weeknight, spicy, vegetarian"></label>
       <div class="edit-columns">
@@ -575,6 +576,7 @@ async function saveRecipeEdit(event) {
         yield: data.get('yield'),
         prepMinutes: data.get('prepMinutes'),
         cookMinutes: data.get('cookMinutes'),
+        totalMinutes: data.get('totalMinutes'),
         tags: String(data.get('tags') || '').split(',').map((tag) => tag.trim()).filter(Boolean),
         ingredients: lines('ingredients'),
         instructions: lines('instructions'),

@@ -347,7 +347,7 @@ dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px)
 .recipe-edit-form input:focus, .recipe-edit-form textarea:focus { box-shadow: 4px 4px 0 var(--yellow); }
 .recipe-edit-form textarea { min-height: 92px; resize: vertical; }
 .edit-wide + .edit-wide, .edit-small-fields, .edit-columns { margin-top: 16px; }
-.edit-small-fields { display: grid; grid-template-columns: 1.4fr .8fr .8fr; gap: 12px; }
+.edit-small-fields { display: grid; grid-template-columns: 1.3fr repeat(3, .8fr); gap: 12px; }
 .edit-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .edit-columns textarea { height: 260px; min-height: 180px; font-family: inherit; line-height: 1.4; }
 .edit-actions { display: flex; align-items: center; gap: 14px; margin-top: 22px; }
