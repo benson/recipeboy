@@ -125,8 +125,7 @@ textarea {
 textarea:focus { box-shadow: 5px 5px 0 var(--yellow); transform: translate(-2px, -2px); }
 textarea::placeholder { color: #74809a; opacity: 1; }
 .form-footer { display: flex; align-items: stretch; flex-direction: column; gap: 7px; margin-top: 0; }
-.form-footer > span { color: #596885; font-size: 14px; }
-.form-footer .primary-button { order: -1; }
+.form-footer .primary-button { min-height: 66px; padding: 14px 20px; font-size: 16px; }
 
 .primary-button, .action-button {
   display: inline-flex;
@@ -166,9 +165,18 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 .search-wrap { display: flex; flex: 1 1 260px; align-items: center; gap: 8px; width: 280px; min-width: 0; height: 60px; padding: 10px 15px; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; }
 .search-wrap > span { font-size: 25px; }
 .search-wrap input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; }
-.sort-wrap, .list-filter-wrap { display: flex; flex: 0 1 166px; align-items: center; gap: 8px; min-width: 0; height: 60px; padding: 10px 13px; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; white-space: nowrap; }
+.sort-wrap, .list-filter-wrap { position: relative; display: flex; flex: 0 1 166px; align-items: center; gap: 8px; min-width: 0; height: 60px; padding: 10px 13px; background: var(--white); border: 4px solid var(--navy); border-radius: 999px; white-space: nowrap; }
 .sort-wrap > span, .list-filter-wrap > span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-.sort-wrap select, .list-filter-wrap select { width: 100%; min-width: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font-weight: 900; cursor: pointer; }
+.custom-select-button { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 7px; min-width: 0; padding: 5px 0; overflow: hidden; color: var(--ink); background: transparent; border: 0; font-weight: 900; cursor: pointer; }
+.custom-select-button [data-select-value] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-button > span:last-child { flex: none; font-size: 16px; transition: transform 140ms ease; }
+.custom-select-button[aria-expanded="true"] > span:last-child { transform: rotate(180deg); }
+.custom-select-button:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; border-radius: 8px; }
+.custom-select-menu { position: absolute; top: calc(100% + 9px); right: -4px; z-index: 12; display: grid; gap: 5px; width: max-content; min-width: calc(100% + 8px); max-width: min(270px, calc(100vw - 28px)); padding: 7px; background: var(--cream); border: 4px solid var(--navy); border-radius: 15px; box-shadow: 5px 5px 0 var(--red); white-space: normal; }
+.custom-select-menu[hidden] { display: none; }
+.custom-select-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 9px 11px; color: var(--navy); background: var(--white); border: 2px solid transparent; border-radius: 9px; font-size: 13px; font-weight: 900; text-align: left; cursor: pointer; }
+.custom-select-menu button:hover, .custom-select-menu button:focus-visible { background: var(--yellow); border-color: var(--navy); outline: 0; }
+.custom-select-menu button[aria-selected="true"] { color: var(--white); background: var(--blue); border-color: var(--navy); }
 .list-filter-wrap { flex-basis: 184px; }
 .tag-filters { display: flex; flex-wrap: nowrap; gap: 7px; margin: -2px 0 15px; padding: 2px 3px 8px; overflow: visible; }
 .tag-filters::after { content: ""; flex: 0 0 1px; }
@@ -477,7 +485,6 @@ footer { height: 12px; background: var(--navy); }
   form { grid-template-columns: 1fr; }
   .primary-button { width: 100%; }
   textarea { height: 108px; min-height: 108px; }
-  .form-footer > span { display: none; }
   .collection-title-wrap { align-items: flex-start; }
   .search-wrap { flex: none; width: 100%; }
   .collection-tools { flex: none; align-items: stretch; flex-direction: column; width: 100%; }

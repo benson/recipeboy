@@ -384,6 +384,25 @@ function renderListFilter() {
   const selectedExists = state.lists.some((list) => list.id === state.listId);
   if (!selectedExists) state.listId = '';
   el.listFilter.innerHTML = `<option value="">All recipes</option>${state.lists.map((list) => `<option value="${esc(list.id)}" ${state.listId === list.id ? 'selected' : ''}>${esc(list.name)} (${list.recipeIds.length})</option>`).join('')}`;
+  syncCustomSelect(el.listFilter);
+}
+
+function syncCustomSelect(select) {
+  const wrap = select?.closest('[data-custom-select]');
+  if (!wrap) return;
+  const selected = select.options[select.selectedIndex] || select.options[0];
+  const valueLabel = wrap.querySelector('[data-select-value]');
+  const menu = wrap.querySelector('.custom-select-menu');
+  if (valueLabel) valueLabel.textContent = selected?.textContent || '';
+  if (menu) menu.innerHTML = [...select.options].map((option) => `<button type="button" role="option" aria-selected="${option.value === select.value}" data-select-option="${esc(option.value)}"><span>${esc(option.textContent)}</span>${option.value === select.value ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('');
+}
+
+function closeCustomSelects(except = null) {
+  for (const wrap of document.querySelectorAll('[data-custom-select]')) {
+    if (wrap === except) continue;
+    wrap.querySelector('.custom-select-menu').hidden = true;
+    wrap.querySelector('.custom-select-button').setAttribute('aria-expanded', 'false');
+  }
 }
 
 function cardTemplate(recipe) {
@@ -949,8 +968,33 @@ el.dialog.addEventListener('close', () => {
   if (location.hash.startsWith('#recipe=')) history.replaceState(null, '', `${location.pathname}${location.search}`);
 });
 el.search.addEventListener('input', () => { state.query = el.search.value; render(); });
-el.sort.addEventListener('change', () => { state.sort = el.sort.value; render(); });
-el.listFilter.addEventListener('change', () => { state.listId = el.listFilter.value; render(); });
+el.sort.addEventListener('change', () => { state.sort = el.sort.value; syncCustomSelect(el.sort); render(); });
+el.listFilter.addEventListener('change', () => { state.listId = el.listFilter.value; syncCustomSelect(el.listFilter); render(); });
+document.addEventListener('click', (event) => {
+  const option = event.target.closest('[data-select-option]');
+  if (option) {
+    const wrap = option.closest('[data-custom-select]');
+    const select = wrap.querySelector('select');
+    select.value = option.dataset.selectOption;
+    select.dispatchEvent(new Event('change'));
+    closeCustomSelects();
+    return;
+  }
+  const toggle = event.target.closest('.custom-select-button');
+  if (toggle) {
+    const wrap = toggle.closest('[data-custom-select]');
+    const menu = wrap.querySelector('.custom-select-menu');
+    const opening = menu.hidden;
+    closeCustomSelects(wrap);
+    menu.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  if (!event.target.closest('[data-custom-select]')) closeCustomSelects();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeCustomSelects();
+});
 el.tagFilters.addEventListener('click', (event) => {
   const button = event.target.closest('[data-tag]');
   if (!button) return;
@@ -1091,6 +1135,7 @@ window.addEventListener('hashchange', () => {
 });
 
 try {
+  syncCustomSelect(el.sort);
   authClient = await initAuth({ onChange: (user) => { void handleAuthChange(user); } });
   await handleAuthChange(authClient.user);
 } catch (error) {

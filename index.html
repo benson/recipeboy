@@ -28,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -70,7 +70,6 @@
         <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
         <textarea id="recipe-input" rows="5" required placeholder="Paste a recipe link… or paste something like:&#10;Kim's chili&#10;2 cans beans, 1 onion…"></textarea>
         <div class="form-footer">
-          <span id="input-hint">Recipeboy cleans it up and saves it.</span>
           <button class="primary-button" type="submit">
             <span>Normalize it!</span>
             <span aria-hidden="true">→</span>
@@ -89,25 +88,29 @@
           </div>
         </div>
         <div class="collection-tools">
-          <label class="list-filter-wrap">
+          <div class="list-filter-wrap custom-select-wrap" data-custom-select>
             <span>List</span>
-            <select id="list-filter" aria-label="Show a recipe list"><option value="">All recipes</option></select>
-          </label>
+            <button class="custom-select-button" type="button" aria-label="Show a recipe list" aria-haspopup="listbox" aria-expanded="false"><span data-select-value>All recipes</span><span aria-hidden="true">⌄</span></button>
+            <div class="custom-select-menu" role="listbox" hidden></div>
+            <select id="list-filter" hidden><option value="">All recipes</option></select>
+          </div>
           <label class="search-wrap">
             <span aria-hidden="true">⌕</span>
             <span class="sr-only">Search recipes</span>
             <input id="search" type="search" placeholder="Search recipes or tags">
           </label>
-          <label class="sort-wrap">
+          <div class="sort-wrap custom-select-wrap" data-custom-select>
             <span>Sort</span>
-            <select id="sort">
+            <button class="custom-select-button" type="button" aria-label="Sort recipes" aria-haspopup="listbox" aria-expanded="false"><span data-select-value>Newest</span><span aria-hidden="true">⌄</span></button>
+            <div class="custom-select-menu" role="listbox" hidden></div>
+            <select id="sort" hidden>
               <option value="newest">Newest</option>
               <option value="top-rated">Highest rated</option>
               <option value="most-made">Most made</option>
               <option value="quickest">Quickest</option>
               <option value="a-z">A–Z</option>
             </select>
-          </label>
+          </div>
         </div>
       </div>
 
@@ -172,6 +175,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=22"></script>
+  <script type="module" src="app.js?v=23"></script>
 </body>
 </html>
