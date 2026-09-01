@@ -1106,6 +1106,7 @@ document.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
+    if (document.querySelector('.detail-more-menu:not([hidden])')) event.preventDefault();
     closeCustomSelects();
     closeDetailMenus();
   }
