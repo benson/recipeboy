@@ -8,6 +8,7 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
 const state = { recipes: [], lists: [], profile: null, stats: null, activity: null, isSignedIn: false, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
 const el = {
   toolbar: document.getElementById('site-toolbar'),
+  hero: document.getElementById('page-top'),
   heroAddSlot: document.getElementById('hero-add-slot'),
   toolbarAddSlot: document.getElementById('toolbar-add-slot'),
   addButton: document.getElementById('add-recipe-button'),
@@ -59,11 +60,11 @@ let loadedUserId = '';
 let addAfterSignIn = false;
 let submittingRecipe = false;
 
-// Keep one real Add button: its empty hero slot remains measurable when docked.
+// Keep one real Add button and dock it only after the hero has left the viewport.
 let headerFrame = 0;
 function updateHeader() {
   headerFrame = 0;
-  const docked = el.heroAddSlot.getBoundingClientRect().top <= el.toolbar.getBoundingClientRect().bottom + 8;
+  const docked = el.hero.getBoundingClientRect().bottom <= el.toolbar.getBoundingClientRect().bottom + 16;
   if (el.toolbar.classList.contains('is-docked') === docked) return;
   const hadFocus = document.activeElement === el.addButton;
   el.toolbar.classList.toggle('is-docked', docked);
