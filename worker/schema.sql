@@ -21,6 +21,14 @@ CREATE INDEX IF NOT EXISTS recipes_created_at ON recipes(created_at DESC);
 CREATE INDEX IF NOT EXISTS recipes_active_created_at ON recipes(deleted_at, created_at DESC);
 CREATE INDEX IF NOT EXISTS recipe_makes_user_id ON recipe_makes(user_id);
 
+CREATE TABLE IF NOT EXISTS recipe_eats (
+  recipe_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (recipe_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS recipe_eats_user_id ON recipe_eats(user_id);
+
 CREATE TABLE IF NOT EXISTS user_profiles (
   user_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
@@ -34,6 +42,7 @@ CREATE TABLE IF NOT EXISTS recipe_reviews (
   user_id TEXT NOT NULL,
   rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
   review_text TEXT NOT NULL DEFAULT '',
+  experience TEXT CHECK (experience IN ('cooked', 'ate')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (recipe_id, user_id)

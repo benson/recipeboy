@@ -593,8 +593,10 @@ async function deleteRecipeList(listId) {
 
 function socialTemplate(recipe) {
   const makers = recipe.makers || [];
+  const eaters = recipe.eaters || [];
   const writtenReviews = (recipe.reviews || []).filter((review) => review.text);
   const selectedRating = Number(recipe.viewerRating || 0);
+  const experience = recipe.viewerExperience || (recipe.madeByViewer ? 'cooked' : recipe.eatenByViewer ? 'ate' : '');
   return `<section class="recipe-social" aria-label="Friends’ ratings and notes">
     <div class="social-summary">
       <div>
@@ -604,6 +606,13 @@ function socialTemplate(recipe) {
         <p>${recipe.ratingCount || 0} rating${recipe.ratingCount === 1 ? '' : 's'}</p>
       </div>
       ${state.isSignedIn ? `<form class="review-form" data-review-form="${esc(recipe.id)}">
+        <fieldset class="review-experience">
+          <legend>Your seat at the table</legend>
+          <div class="experience-options">
+            <label><input type="radio" name="experience" value="cooked" required ${experience === 'cooked' ? 'checked' : ''}><span>I cooked it</span></label>
+            <label><input type="radio" name="experience" value="ate" required ${experience === 'ate' ? 'checked' : ''}><span>I ate it</span></label>
+          </div>
+        </fieldset>
         <fieldset>
           <legend>Your rating</legend>
           <input type="hidden" name="rating" value="${selectedRating}">
@@ -613,25 +622,27 @@ function socialTemplate(recipe) {
         </fieldset>
         <label for="review-${esc(recipe.id)}">A note for your friends <span>optional</span></label>
         <textarea id="review-${esc(recipe.id)}" name="review" rows="3" maxlength="1000" placeholder="Worth doubling? Better with extra garlic?">${esc(recipe.viewerReview || '')}</textarea>
-        <label for="review-photos-${esc(recipe.id)}">Photos from your cook <span>optional</span></label>
+        <label for="review-photos-${esc(recipe.id)}">Photos from your meal <span>optional</span></label>
         <input class="review-photo-input" id="review-photos-${esc(recipe.id)}" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-        <p class="review-cook-note">${recipe.madeByViewer ? 'You’re already in the cooked-by crew.' : 'Saving this review also records that you cooked it.'}</p>
+        <p class="review-cook-note">Cooked it or just enjoyed it? Both get a say. Eating won’t count as cooking.</p>
         <div class="review-form-actions">
-          <button class="primary-button" type="submit">${selectedRating ? 'Update cook review' : 'Save cook review'}</button>
+          <button class="primary-button" type="submit">${selectedRating ? 'Update review' : 'Save review'}</button>
           ${selectedRating ? `<button class="text-button" type="button" data-remove-review="${esc(recipe.id)}">Remove mine</button>` : ''}
         </div>
-      </form>` : `<div class="viewer-social-cta"><span class="social-eyebrow">Want a seat?</span><h3>Join the tasting table</h3><p>Sign in to rate this recipe, leave a note, and add photos after you cook it.</p><button class="primary-button" type="button" data-sign-in>Sign in to join</button></div>`}
+      </form>` : `<div class="viewer-social-cta"><span class="social-eyebrow">Want a seat?</span><h3>Join the tasting table</h3><p>Cooked it or ate it? Sign in to rate this recipe, leave a note, and share photos from your meal.</p><button class="primary-button" type="button" data-sign-in>Sign in to join</button></div>`}
     </div>
     <div class="friend-columns">
       <div class="made-by-panel">
         <h3>Cooked by</h3>
         ${makers.length ? `<div class="maker-list">${makers.map((maker) => `<div class="maker-chip">${avatarTemplate(maker, 'avatar-small')}<span>${esc(maker.displayName)}</span></div>`).join('')}</div>` : '<p>No cooks yet. You could be first.</p>'}
+        <h3 class="eaten-by-heading">Eaten by</h3>
+        ${eaters.length ? `<div class="maker-list eater-list">${eaters.map((eater) => `<div class="maker-chip">${avatarTemplate(eater, 'avatar-small')}<span>${esc(eater.displayName)}</span></div>`).join('')}</div>` : '<p>No tasters yet. Grab a seat!</p>'}
       </div>
       <div class="reviews-panel">
         <h3>Friend notes</h3>
         ${writtenReviews.length ? `<div class="review-list">${writtenReviews.map((review) => `<article class="friend-review">
           ${avatarTemplate(review, 'avatar-small')}
-          <div><div class="review-heading"><strong>${esc(review.displayName)}</strong><span aria-label="${review.rating} out of 5 stars">${starText(review.rating)}</span></div><p>${esc(review.text)}</p></div>
+          <div><div class="review-heading"><strong>${esc(review.displayName)}</strong><span aria-label="${review.rating} out of 5 stars">${starText(review.rating)}</span></div>${review.experience ? `<small class="review-perspective">${review.experience === 'ate' ? 'Ate it' : 'Cooked it'}</small>` : ''}<p>${esc(review.text)}</p></div>
         </article>`).join('')}</div>` : '<p>No notes yet—just hungry anticipation.</p>'}
       </div>
     </div>
@@ -664,7 +675,10 @@ function detailTemplate(recipe) {
         <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
         <button class="action-button" data-copy="${esc(recipe.id)}" aria-label="Copy shopping list">Copy list</button>
         ${state.isSignedIn ? `<button class="action-button" data-save-list="${esc(recipe.id)}" aria-label="${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to recipe lists' : 'Save to a recipe list'}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
-        <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, rate, or save</button>'}
+        <div class="detail-experience-actions" role="group" aria-label="Your meal">
+          <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>
+          <button class="action-button eaten" data-eaten="${esc(recipe.id)}" ${recipe.eatenByViewer ? 'disabled' : ''}>${recipe.eatenByViewer ? 'You ate this' : 'I ate this'} · ${recipe.eatenCount || 0}</button>
+        </div>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, taste, or rate</button>'}
       </div>
       <div class="detail-more" data-detail-more>
         <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions">More <span class="detail-more-dots" aria-hidden="true">•••</span></button>
@@ -680,8 +694,8 @@ function detailTemplate(recipe) {
       <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
       <section><h3>What to do</h3><ol class="steps">${steps || '<li>Instructions weren’t listed.</li>'}</ol></section>
     </div>
-    <section class="recipe-photos" aria-label="Cooking photos">
-      <div class="recipe-photos-heading"><div><span class="social-eyebrow">From the kitchen</span><h3>Cooking photos</h3></div></div>
+    <section class="recipe-photos" aria-label="Meal photos">
+      <div class="recipe-photos-heading"><div><span class="social-eyebrow">At the table</span><h3>Meal photos</h3></div></div>
       ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption>${state.isSignedIn ? `<button type="button" data-delete-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Remove this photo">×</button>` : ''}</figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
     </section>
     ${socialTemplate(recipe)}`;
@@ -824,6 +838,7 @@ function replaceViewerProfile(profile) {
   for (const recipe of state.recipes) {
     if (recipe.addedBy?.isViewer) recipe.addedBy = { ...recipe.addedBy, ...profile };
     recipe.makers = (recipe.makers || []).map((maker) => maker.isViewer ? { ...maker, ...profile } : maker);
+    recipe.eaters = (recipe.eaters || []).map((eater) => eater.isViewer ? { ...eater, ...profile } : eater);
     recipe.reviews = (recipe.reviews || []).map((review) => review.isViewer ? { ...review, ...profile } : review);
     recipe.photos = (recipe.photos || []).map((photo) => photo.addedBy?.isViewer ? { ...photo, addedBy: { ...photo.addedBy, ...profile } } : photo);
   }
@@ -856,18 +871,14 @@ async function saveReview(event) {
   const recipe = state.recipes.find((item) => item.id === id);
   const data = new FormData(form);
   const rating = Number(data.get('rating'));
+  const experience = data.get('experience');
   const photos = [...(form.elements.photos?.files || [])];
   if (!rating) return showToast('Tap a star first!');
+  if (!['cooked', 'ate'].includes(experience)) return showToast('Choose whether you cooked it or ate it.');
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   try {
-    Object.assign(recipe, await api(`/recipes/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify({ rating, review: data.get('review') }) }));
-    if (!recipe.madeByViewer) {
-      const madeResult = await api(`/recipes/${encodeURIComponent(id)}/made`, { method: 'POST' });
-      recipe.madeCount = madeResult.madeCount;
-      recipe.madeByViewer = true;
-      if (!madeResult.alreadyMade && madeResult.maker) recipe.makers = [...(recipe.makers || []), madeResult.maker];
-    }
+    Object.assign(recipe, await api(`/recipes/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify({ rating, review: data.get('review'), experience }) }));
     let photoWarning = '';
     if (photos.length) {
       button.textContent = 'Framing your photos…';
@@ -876,7 +887,7 @@ async function saveReview(event) {
     }
     render();
     refreshDialog();
-    showToast(photoWarning || (photos.length ? 'Cook, review, and photos saved!' : 'Cook review saved!'));
+    showToast(photoWarning || (photos.length ? 'Review and meal photos saved!' : 'Review saved!'));
   } catch (error) { showToast(error.message); }
   finally { button.disabled = false; }
 }
@@ -903,6 +914,24 @@ async function markMade(id) {
     render();
     refreshDialog();
     showToast(result.alreadyMade ? 'Recipeboy already counted this cook!' : (result.madeCount === 1 ? 'First cook! Legendary.' : `${result.madeCount} cooks and counting!`));
+  } catch (error) { showToast(error.message); }
+}
+
+async function markEaten(id) {
+  const recipe = state.recipes.find((item) => item.id === id);
+  if (!recipe) return;
+  try {
+    const result = await api(`/recipes/${encodeURIComponent(id)}/ate`, { method: 'POST' });
+    Object.assign(recipe, result);
+    render();
+    refreshDialog();
+    const form = el.dialogContent.querySelector('[data-review-form]');
+    if (form) {
+      form.querySelector('input[value="ate"]').checked = true;
+      form.scrollIntoView({ block: 'center', behavior: 'instant' });
+      form.querySelector('[data-rating]')?.focus({ preventScroll: true });
+    }
+    showToast(result.alreadyEaten ? 'Recipeboy already saved your seat!' : 'Counted as a taster, not a cook. How was it?');
   } catch (error) { showToast(error.message); }
 }
 
@@ -1022,12 +1051,14 @@ function relativeActivityTime(value) {
 
 function activityCopy(item) {
   if (item.type === 'cooked') return 'cooked';
+  if (item.type === 'ate') return 'ate';
   if (item.type === 'rated') return 'rated';
   return 'added';
 }
 
 function activityBadge(item) {
   if (item.type === 'cooked') return 'Cooked';
+  if (item.type === 'ate') return 'Ate';
   if (item.type === 'rated') return `★ ${Number(item.rating) || 0}`;
   return 'New';
 }
@@ -1091,6 +1122,8 @@ async function handleAction(event) {
   if (saveListButton) return openListDialog(saveListButton.dataset.saveList);
   const madeButton = event.target.closest('[data-made]');
   if (madeButton) return markMade(madeButton.dataset.made);
+  const eatenButton = event.target.closest('[data-eaten]');
+  if (eatenButton) return markEaten(eatenButton.dataset.eaten);
   const deletePhotoButton = event.target.closest('[data-delete-photo]');
   if (deletePhotoButton) return deletePhoto(deletePhotoButton.dataset.recipeId, deletePhotoButton.dataset.deletePhoto);
   const deleteButton = event.target.closest('[data-delete]');

@@ -853,11 +853,15 @@ function rowToRecipe(row) {
     ...recipe,
     madeCount: row.made_count,
     madeByViewer: Boolean(row.made_by_viewer),
+    eatenByViewer: Boolean(row.eaten_by_viewer),
+    eatenCount: Number(row.eaten_count || 0),
     ratingAverage: Number(row.rating_average || 0),
     ratingCount: Number(row.rating_count || 0),
     viewerRating: Number(row.viewer_rating || 0),
     viewerReview: String(row.viewer_review || ''),
+    viewerExperience: row.viewer_experience || '',
     makers: [],
+    eaters: [],
     reviews: [],
     photos: [],
     addedBy: row.creator_user_id ? {
@@ -878,20 +882,23 @@ async function listRecipes(env, userId) {
       creator.avatar_json AS creator_avatar_json,
       (r.created_by_user_id = ?) AS added_by_viewer,
       EXISTS(SELECT 1 FROM recipe_makes m WHERE m.recipe_id = r.id AND m.user_id = ?) AS made_by_viewer,
+      EXISTS(SELECT 1 FROM recipe_eats e WHERE e.recipe_id = r.id AND e.user_id = ?) AS eaten_by_viewer,
+      (SELECT COUNT(*) FROM recipe_eats e WHERE e.recipe_id = r.id) AS eaten_count,
       COALESCE((SELECT AVG(rr.rating) FROM recipe_reviews rr WHERE rr.recipe_id = r.id), 0) AS rating_average,
       (SELECT COUNT(*) FROM recipe_reviews rr WHERE rr.recipe_id = r.id) AS rating_count,
       COALESCE((SELECT rr.rating FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), 0) AS viewer_rating,
-      COALESCE((SELECT rr.review_text FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), '') AS viewer_review
+      COALESCE((SELECT rr.review_text FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?), '') AS viewer_review,
+      (SELECT rr.experience FROM recipe_reviews rr WHERE rr.recipe_id = r.id AND rr.user_id = ?) AS viewer_experience
     FROM recipes r
     LEFT JOIN user_profiles creator ON creator.user_id = r.created_by_user_id
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 500
-  `).bind(userId, userId, userId, userId, userId).all();
+  `).bind(userId, userId, userId, userId, userId, userId, userId).all();
   const recipes = results.map(rowToRecipe);
   if (!recipes.length) return recipes;
 
-  const [makerRows, reviewRows, photoRows] = await Promise.all([
+  const [makerRows, reviewRows, photoRows, eaterRows] = await Promise.all([
     env.DB.prepare(`
       SELECT m.recipe_id, m.user_id, m.created_at, p.display_name, p.avatar_json
       FROM recipe_makes m
@@ -900,7 +907,7 @@ async function listRecipes(env, userId) {
       ORDER BY m.created_at ASC
     `).all(),
     env.DB.prepare(`
-      SELECT rr.recipe_id, rr.user_id, rr.rating, rr.review_text, rr.updated_at, p.display_name, p.avatar_json
+      SELECT rr.recipe_id, rr.user_id, rr.rating, rr.review_text, rr.experience, rr.updated_at, p.display_name, p.avatar_json
       FROM recipe_reviews rr
       JOIN recipes r ON r.id = rr.recipe_id AND r.deleted_at IS NULL
       LEFT JOIN user_profiles p ON p.user_id = rr.user_id
@@ -912,6 +919,13 @@ async function listRecipes(env, userId) {
       JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
       LEFT JOIN user_profiles p ON p.user_id = ph.user_id
       ORDER BY ph.created_at DESC
+    `).all(),
+    env.DB.prepare(`
+      SELECT e.recipe_id, e.user_id, e.created_at, p.display_name, p.avatar_json
+      FROM recipe_eats e
+      JOIN recipes r ON r.id = e.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = e.user_id
+      ORDER BY e.created_at ASC
     `).all(),
   ]);
   const byId = new Map(recipes.map((recipe) => [recipe.id, recipe]));
@@ -925,9 +939,14 @@ async function listRecipes(env, userId) {
       ...profileFromRow(row),
       rating: Number(row.rating),
       text: String(row.review_text || ''),
+      experience: row.experience || '',
       updatedAt: row.updated_at,
       isViewer: row.user_id === userId,
     });
+  }
+  for (const row of eaterRows.results || []) {
+    const recipe = byId.get(row.recipe_id);
+    if (recipe) recipe.eaters.push({ ...profileFromRow(row), ateAt: row.created_at, isViewer: row.user_id === userId });
   }
   for (const row of photoRows.results || []) {
     const recipe = byId.get(row.recipe_id);
@@ -982,25 +1001,50 @@ async function createRecipe(request, env, userId) {
   const createdAt = new Date().toISOString();
   await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
     .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt, userId).run();
-  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, ratingAverage: 0, ratingCount: 0, viewerRating: 0, viewerReview: '', makers: [], reviews: [], photos: [], addedBy: { ...(await profileForUser(env, userId)), isViewer: true }, createdAt, canEdit: true } }, 201);
+  return json({ recipe: { id, ...recipe, madeCount: 0, madeByViewer: false, eatenCount: 0, eatenByViewer: false, ratingAverage: 0, ratingCount: 0, viewerRating: 0, viewerReview: '', viewerExperience: '', makers: [], eaters: [], reviews: [], photos: [], addedBy: { ...(await profileForUser(env, userId)), isViewer: true }, createdAt, canEdit: true } }, 201);
+}
+
+// Keep each participation record and the legacy cook counter in one transaction.
+function participationStatements(id, userId, experience, now, env) {
+  if (experience === 'ate') return [env.DB.prepare('INSERT OR IGNORE INTO recipe_eats (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(id, userId, now)];
+  if (experience !== 'cooked') return [];
+  return [
+    env.DB.prepare('UPDATE recipes SET made_count = made_count + 1 WHERE id = ? AND NOT EXISTS (SELECT 1 FROM recipe_makes WHERE recipe_id = ? AND user_id = ?)').bind(id, id, userId),
+    env.DB.prepare('INSERT OR IGNORE INTO recipe_makes (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(id, userId, now),
+  ];
+}
+
+async function recipeParticipationSummary(id, env, userId) {
+  const row = await env.DB.prepare('SELECT made_count FROM recipes WHERE id = ?').bind(id).first();
+  const [makerRows, eaterRows] = await Promise.all([
+    env.DB.prepare('SELECT m.user_id, m.created_at, p.display_name, p.avatar_json FROM recipe_makes m LEFT JOIN user_profiles p ON p.user_id = m.user_id WHERE m.recipe_id = ? ORDER BY m.created_at ASC').bind(id).all(),
+    env.DB.prepare('SELECT e.user_id, e.created_at, p.display_name, p.avatar_json FROM recipe_eats e LEFT JOIN user_profiles p ON p.user_id = e.user_id WHERE e.recipe_id = ? ORDER BY e.created_at ASC').bind(id).all(),
+  ]);
+  const makers = (makerRows.results || []).map((person) => ({ ...profileFromRow(person), madeAt: person.created_at, isViewer: person.user_id === userId }));
+  const eaters = (eaterRows.results || []).map((person) => ({ ...profileFromRow(person), ateAt: person.created_at, isViewer: person.user_id === userId }));
+  return { madeCount: Number(row?.made_count || 0), madeByViewer: makers.some((person) => person.isViewer), makers, eatenCount: eaters.length, eatenByViewer: eaters.some((person) => person.isViewer), eaters };
 }
 
 async function markMade(id, env, userId) {
   const recipe = await env.DB.prepare('SELECT made_count FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
   if (!recipe) return json({ error: 'Recipe not found.' }, 404);
-  const inserted = await env.DB.prepare('INSERT OR IGNORE INTO recipe_makes (recipe_id, user_id, created_at) VALUES (?, ?, ?)')
-    .bind(id, userId, new Date().toISOString()).run();
+  const [, inserted] = await env.DB.batch(participationStatements(id, userId, 'cooked', new Date().toISOString(), env));
   const alreadyMade = Number(inserted.meta?.changes || 0) === 0;
-  const maker = { ...(await profileForUser(env, userId)), madeAt: new Date().toISOString(), isViewer: true };
-  if (alreadyMade) return json({ id, madeCount: recipe.made_count, madeByViewer: true, alreadyMade: true, maker });
-  const row = await env.DB.prepare('UPDATE recipes SET made_count = made_count + 1 WHERE id = ? RETURNING made_count').bind(id).first();
-  return json({ id, madeCount: row?.made_count ?? recipe.made_count + 1, madeByViewer: true, alreadyMade: false, maker });
+  const summary = await recipeParticipationSummary(id, env, userId);
+  return json({ id, ...summary, alreadyMade, maker: summary.makers.find((person) => person.isViewer) });
+}
+
+async function markEaten(id, env, userId) {
+  const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+  if (!recipe) return json({ error: 'Recipe not found.' }, 404);
+  const [inserted] = await env.DB.batch(participationStatements(id, userId, 'ate', new Date().toISOString(), env));
+  return json({ id, ...(await recipeParticipationSummary(id, env, userId)), alreadyEaten: Number(inserted.meta?.changes || 0) === 0 });
 }
 
 async function recipeReviewSummary(id, env, userId) {
   const aggregate = await env.DB.prepare('SELECT COALESCE(AVG(rating), 0) AS rating_average, COUNT(*) AS rating_count FROM recipe_reviews WHERE recipe_id = ?').bind(id).first();
   const { results } = await env.DB.prepare(`
-    SELECT rr.user_id, rr.rating, rr.review_text, rr.updated_at, p.display_name, p.avatar_json
+    SELECT rr.user_id, rr.rating, rr.review_text, rr.experience, rr.updated_at, p.display_name, p.avatar_json
     FROM recipe_reviews rr
     LEFT JOIN user_profiles p ON p.user_id = rr.user_id
     WHERE rr.recipe_id = ?
@@ -1010,6 +1054,7 @@ async function recipeReviewSummary(id, env, userId) {
     ...profileFromRow(row),
     rating: Number(row.rating),
     text: String(row.review_text || ''),
+    experience: row.experience || '',
     updatedAt: row.updated_at,
     isViewer: row.user_id === userId,
   }));
@@ -1019,6 +1064,7 @@ async function recipeReviewSummary(id, env, userId) {
     ratingCount: Number(aggregate?.rating_count || 0),
     viewerRating: viewer?.rating || 0,
     viewerReview: viewer?.text || '',
+    viewerExperience: viewer?.experience || '',
     reviews,
   };
 }
@@ -1031,14 +1077,18 @@ async function saveReview(id, request, env, userId) {
   catch (error) { return json({ error: error.message }, error.status || 400); }
   const rating = Number(body.rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return json({ error: 'Choose a rating from 1 to 5.' }, 400);
+  // Older clients omit this field; retain their reviews without inferring a role.
+  const experience = body.experience ?? null;
+  if (experience !== null && experience !== 'cooked' && experience !== 'ate') return json({ error: 'Choose whether you cooked it or ate it.' }, 400);
   const reviewText = String(body.review || '').replace(/\0/g, '').replace(/\r\n?/g, '\n').trim().slice(0, 1000);
   const now = new Date().toISOString();
-  await env.DB.prepare(`
-    INSERT INTO recipe_reviews (recipe_id, user_id, rating, review_text, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(recipe_id, user_id) DO UPDATE SET rating = excluded.rating, review_text = excluded.review_text, updated_at = excluded.updated_at
-  `).bind(id, userId, rating, reviewText, now, now).run();
-  return json(await recipeReviewSummary(id, env, userId));
+  const reviewStatement = env.DB.prepare(`
+    INSERT INTO recipe_reviews (recipe_id, user_id, rating, review_text, experience, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(recipe_id, user_id) DO UPDATE SET rating = excluded.rating, review_text = excluded.review_text, experience = COALESCE(excluded.experience, recipe_reviews.experience), updated_at = excluded.updated_at
+  `).bind(id, userId, rating, reviewText, experience, now, now);
+  await env.DB.batch([...participationStatements(id, userId, experience, now, env), reviewStatement]);
+  return json({ ...(await recipeReviewSummary(id, env, userId)), ...(await recipeParticipationSummary(id, env, userId)) });
 }
 
 async function deleteReview(id, env, userId) {
@@ -1266,6 +1316,12 @@ async function friendActivity(env, userId) {
       JOIN recipes r ON r.id = m.recipe_id AND r.deleted_at IS NULL
       LEFT JOIN user_profiles p ON p.user_id = m.user_id
       UNION ALL
+      SELECT 'ate' AS activity_type, r.id AS recipe_id, r.title AS recipe_title,
+        e.user_id, p.display_name, p.avatar_json, e.created_at AS occurred_at, NULL AS rating
+      FROM recipe_eats e
+      JOIN recipes r ON r.id = e.recipe_id AND r.deleted_at IS NULL
+      LEFT JOIN user_profiles p ON p.user_id = e.user_id
+      UNION ALL
       SELECT 'rated' AS activity_type, r.id AS recipe_id, r.title AS recipe_title,
         rr.user_id, p.display_name, p.avatar_json, rr.updated_at AS occurred_at, rr.rating
       FROM recipe_reviews rr
@@ -1342,7 +1398,12 @@ export default {
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
       if (request.method === 'POST' && madeMatch) {
         const limited = await rateLimit(request, env.MADE_RATE_LIMITER, 'Recipeboy believes you. Give the button a minute.');
-        return limited || markMade(madeMatch[1], env, auth.userId);
+        return limited || await markMade(madeMatch[1], env, auth.userId);
+      }
+      const eatenMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/ate$/);
+      if (request.method === 'POST' && eatenMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before another bite.');
+        return limited || await markEaten(eatenMatch[1], env, auth.userId);
       }
       const photoCollectionMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos$/);
       if (request.method === 'POST' && photoCollectionMatch) {
@@ -1357,7 +1418,7 @@ export default {
       const reviewMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/review$/);
       if (request.method === 'POST' && reviewMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before adding more tasting notes.');
-        return limited || saveReview(reviewMatch[1], request, env, auth.userId);
+        return limited || await saveReview(reviewMatch[1], request, env, auth.userId);
       }
       if (request.method === 'DELETE' && reviewMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more tasting notes.');
