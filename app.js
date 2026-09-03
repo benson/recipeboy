@@ -1,5 +1,6 @@
 import { initAuth } from './auth.js?v=2';
 import { normalizeYield, yieldLabel, timeIsEstimated } from './recipe-metadata.js?v=1';
+import { formatDuration, parseDuration } from './duration.js?v=1';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
@@ -283,10 +284,7 @@ function minutesLabel(recipe) {
   const minutes = recipe.totalMinutes || ((recipe.prepMinutes || 0) + (recipe.cookMinutes || 0));
   if (!minutes) return '';
   const prefix = timeIsEstimated(recipe) ? '≈ ' : '';
-  if (minutes < 60) return `${prefix}${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return prefix + (remainder ? `${hours} hr ${remainder} min` : `${hours} hr`);
+  return `${prefix}${formatDuration(minutes)}`;
 }
 
 function ingredientText(ingredient) {
@@ -803,15 +801,18 @@ function adjustRecipeScale(direction) {
 function editRecipeTemplate(recipe) {
   const ingredients = recipe.ingredients.map(ingredientText).join('\n');
   const instructions = recipe.instructions.join('\n');
+  const prepTime = formatDuration(recipe.prepMinutes);
+  const cookTime = formatDuration(recipe.cookMinutes);
+  const calculatedTotal = formatDuration((recipe.prepMinutes || 0) + (recipe.cookMinutes || 0));
   return `<div class="edit-hero"><span class="social-eyebrow">Tidy the keeper</span><h2>Edit recipe</h2><p>These changes update the shared recipe for everyone.</p></div>
     <form id="recipe-edit-form" class="recipe-edit-form" data-edit-id="${esc(recipe.id)}">
       <label class="edit-wide">Recipe name<input name="title" maxlength="160" required value="${esc(recipe.title)}"></label>
       <label class="edit-wide">Description<textarea name="description" rows="3" maxlength="1000" placeholder="What makes this one worth keeping?">${esc(recipe.description || '')}</textarea></label>
       <div class="edit-small-fields">
         <label>Yield<input name="yield" maxlength="100" value="${esc(recipe.yield || '')}" placeholder="Serves 4"></label>
-        <label>Prep minutes<input name="prepMinutes" type="number" min="0" max="10080" value="${Number(recipe.prepMinutes || 0)}"></label>
-        <label>Cook minutes<input name="cookMinutes" type="number" min="0" max="10080" value="${Number(recipe.cookMinutes || 0)}"></label>
-        <label>Total minutes<input name="totalMinutes" type="number" min="0" max="10080" value="${Number(recipe.totalMinutes || 0)}"></label>
+        <label>Prep time<input name="prepMinutes" type="text" inputmode="text" maxlength="80" value="${esc(prepTime)}" placeholder="20 min"></label>
+        <label>Cook time<input name="cookMinutes" type="text" inputmode="text" maxlength="80" value="${esc(cookTime)}" placeholder="3 hr 15 min"></label>
+        <div class="edit-time-total"><span>Total time</span><output data-edit-total-time aria-live="polite">${esc(calculatedTotal || '—')}</output></div>
       </div>
       <label class="edit-wide">Tags <span>comma separated</span><input name="tags" maxlength="500" value="${esc((recipe.tags || []).join(', '))}" placeholder="weeknight, spicy, vegetarian"></label>
       <div class="edit-columns">
@@ -827,6 +828,19 @@ function openRecipeEditor(id) {
   if (!recipe) return;
   el.editContent.innerHTML = editRecipeTemplate(recipe);
   el.editDialog.showModal();
+}
+
+function updateEditTimeTotal(form) {
+  const inputs = ['prepMinutes', 'cookMinutes'].map((name) => form.elements.namedItem(name));
+  let total = 0;
+  for (const input of inputs) {
+    const value = String(input.value || '').trim();
+    const minutes = parseDuration(value);
+    const validZero = /^0(?:\s|$)/.test(value);
+    input.setCustomValidity(value && !minutes && !validZero ? 'Try a time like “20 min” or “3 hours 15 minutes”.' : '');
+    total += minutes;
+  }
+  form.querySelector('[data-edit-total-time]').textContent = formatDuration(total) || '—';
 }
 
 async function saveRecipeEdit(event) {
@@ -848,7 +862,6 @@ async function saveRecipeEdit(event) {
         yield: data.get('yield'),
         prepMinutes: data.get('prepMinutes'),
         cookMinutes: data.get('cookMinutes'),
-        totalMinutes: data.get('totalMinutes'),
         tags: String(data.get('tags') || '').split(',').map((tag) => tag.trim()).filter(Boolean),
         ingredients: lines('ingredients'),
         instructions: lines('instructions'),
@@ -1298,6 +1311,9 @@ el.editDialog.addEventListener('click', (event) => {
   if (event.target === el.editDialog || event.target.closest('[data-cancel-edit]')) el.editDialog.close();
 });
 el.editDialog.addEventListener('submit', (event) => { if (event.target.id === 'recipe-edit-form') void saveRecipeEdit(event); });
+el.editDialog.addEventListener('input', (event) => {
+  if (event.target.matches('[name="prepMinutes"], [name="cookMinutes"]')) updateEditTimeTotal(event.target.form);
+});
 document.getElementById('list-close').addEventListener('click', () => el.listDialog.close());
 el.listDialog.addEventListener('click', (event) => {
   if (event.target === el.listDialog || event.target.closest('[data-list-done]')) el.listDialog.close();

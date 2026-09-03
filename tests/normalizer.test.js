@@ -158,6 +158,10 @@ test('rejects oversized API request bodies before normalization', async () => {
 test('parses ISO and human durations', () => {
   assert.equal(parseDuration('PT1H20M'), 80);
   assert.equal(parseDuration('1 hour 15 minutes'), 75);
+  assert.equal(parseDuration('3h 15m'), 195);
+  assert.equal(parseDuration('3:15'), 195);
+  assert.equal(parseDuration('an hour and 20 min'), 80);
+  assert.equal(parseDuration('half an hour'), 30);
 });
 
 test('splits common ingredient amounts and units', () => {

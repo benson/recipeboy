@@ -1,4 +1,5 @@
 import { normalizeYield } from '../recipe-metadata.js';
+import { parseDuration } from '../duration.js';
 
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
@@ -6,6 +7,7 @@ const MAX_REQUEST_BODY = 256_000;
 const MAX_PHOTO_BYTES = 8_000_000;
 const MAX_REDIRECTS = 5;
 const OPENAI_RECIPE_MODEL = 'gpt-5.4-nano';
+const DERIVED_TIME_TAGS = new Set(['≤ 30 min', '30–60 min', '1+ hours', 'prep ≤ 15 min', 'prep 15–30 min', 'prep 30+ min']);
 let redditTokenCache = null;
 
 function cors() {
@@ -197,17 +199,6 @@ function decodeHtml(value = '') {
 function toArray(value) {
   if (value == null) return [];
   return Array.isArray(value) ? value : [value];
-}
-
-function parseDuration(value) {
-  if (typeof value === 'number') return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
-  const text = String(value || '').trim();
-  if (/^\d+(?:\.\d+)?$/.test(text)) return Math.round(Number(text));
-  const iso = text.match(/^P(?:([\d.]+)D)?(?:T(?:([\d.]+)H)?(?:([\d.]+)M)?)?$/i);
-  if (iso) return Math.round((Number(iso[1] || 0) * 1440) + (Number(iso[2] || 0) * 60) + Number(iso[3] || 0));
-  const hours = Number(text.match(/([\d.]+)\s*(?:hours?|hrs?)/i)?.[1] || 0);
-  const minutes = Number(text.match(/([\d.]+)\s*(?:minutes?|mins?)/i)?.[1] || 0);
-  return Math.round(hours * 60 + minutes) || 0;
 }
 
 const UNIT_PATTERN = '(?:cups?|c|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|grams?|g|kilograms?|kg|milliliters?|ml|liters?|l|cloves?|cans?|packages?|pkg|pinch(?:es)?|dash(?:es)?|slices?|sprigs?|stalks?|heads?|bunch(?:es)?)';
@@ -1116,12 +1107,20 @@ async function updateRecipe(id, request, env, userId) {
     .map((item) => cleanText(item, 5000)).filter(Boolean);
   if (!ingredients.length) return json({ error: 'Add at least one ingredient.' }, 400);
   if (!instructions.length) return json({ error: 'Add at least one instruction.' }, 400);
-  const minutes = (value) => Math.max(0, Math.min(10_080, Math.round(Number(value) || 0)));
-  const prepMinutes = minutes(body.prepMinutes);
-  const cookMinutes = minutes(body.cookMinutes);
-  const totalMinutes = minutes(body.totalMinutes) || prepMinutes + cookMinutes;
+  const duration = (value) => Math.max(0, Math.min(10_080, parseDuration(value)));
+  const invalidDuration = (value) => {
+    const text = String(value ?? '').trim();
+    return Boolean(text && !duration(text) && !/^0(?:\s|$)/.test(text));
+  };
+  if (invalidDuration(body.prepMinutes) || invalidDuration(body.cookMinutes)) {
+    return json({ error: 'Write times like “20 min” or “3 hours 15 minutes”.' }, 400);
+  }
+  const prepMinutes = duration(body.prepMinutes);
+  const cookMinutes = duration(body.cookMinutes);
+  const totalMinutes = Math.min(10_080, prepMinutes + cookMinutes);
   const tags = toArray(body.tags).flatMap((tag) => String(tag).split(','))
-    .map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean).slice(0, 16);
+    .map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean)
+    .filter((tag) => !DERIVED_TIME_TAGS.has(tag)).slice(0, 16);
   const recipe = withDerivedTags({
     ...original,
     title,
