@@ -2,6 +2,8 @@
 
 A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, meal photos, ratings, and separate per-person “I cooked this” and “I ate this” records. Friends can review and upload meal photos as either a cook or a taster. Eating never increments the cook count or cooking leaderboard. Recipe cards distinguish who added a recipe from the friends who cooked it, and the stats page celebrates the top contributors, cooks, and reviewers.
 
+The compact Add recipe button lives over the hero sun, opens the importer in a modal, and moves into the persistent navigation bar after it scrolls out of reach. The same button element is reparented between two slots so there is never a duplicate action or conflicting focus target. Closing the modal preserves an unsaved draft; successful imports clear it and open the saved recipe. Signed-out visitors can browse, and Add recipe starts sign-in before opening the form.
+
 Reviews require an explicit cooked/ate choice in the current UI. The Worker records that choice and its participation record atomically. Repeated actions or review edits do not double-count people. Historical reviews are left unclassified and all previous cook counts are preserved. Apply `worker/migrations/0007_recipe_eats.sql` once to an existing database before deploying this version. The Feed includes eating as a distinct activity.
 
 ### Metadata cleanup

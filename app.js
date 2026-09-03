@@ -7,6 +7,11 @@ const API = ['localhost', '127.0.0.1'].includes(location.hostname)
 
 const state = { recipes: [], lists: [], profile: null, stats: null, activity: null, isSignedIn: false, query: '', tag: '', listId: '', sort: 'newest', activeId: null, activeScale: 1, listRecipeId: null, listEditId: null, confirmDeleteListId: null, confirmDeleteId: null };
 const el = {
+  toolbar: document.getElementById('site-toolbar'),
+  heroAddSlot: document.getElementById('hero-add-slot'),
+  toolbarAddSlot: document.getElementById('toolbar-add-slot'),
+  addButton: document.getElementById('add-recipe-button'),
+  addDialog: document.getElementById('add-recipe-dialog'),
   form: document.getElementById('recipe-form'),
   input: document.getElementById('recipe-input'),
   status: document.getElementById('form-status'),
@@ -51,6 +56,58 @@ const el = {
 let authClient = null;
 let pendingAuthUser;
 let loadedUserId = '';
+let addAfterSignIn = false;
+let submittingRecipe = false;
+
+// Keep one real Add button: its empty hero slot remains measurable when docked.
+let headerFrame = 0;
+function updateHeader() {
+  headerFrame = 0;
+  const docked = el.heroAddSlot.getBoundingClientRect().top <= el.toolbar.getBoundingClientRect().bottom + 8;
+  if (el.toolbar.classList.contains('is-docked') === docked) return;
+  const hadFocus = document.activeElement === el.addButton;
+  el.toolbar.classList.toggle('is-docked', docked);
+  (docked ? el.toolbarAddSlot : el.heroAddSlot).append(el.addButton);
+  const brand = el.toolbar.querySelector('.toolbar-brand');
+  brand.tabIndex = docked ? 0 : -1;
+  brand.setAttribute('aria-hidden', String(!docked));
+  if (hadFocus) el.addButton.focus({ preventScroll: true });
+}
+function scheduleHeaderUpdate() {
+  if (!headerFrame) headerFrame = requestAnimationFrame(updateHeader);
+}
+window.addEventListener('scroll', scheduleHeaderUpdate, { passive: true });
+window.addEventListener('resize', scheduleHeaderUpdate);
+window.addEventListener('pageshow', scheduleHeaderUpdate);
+updateHeader();
+
+async function openAddRecipe() {
+  if (!state.isSignedIn) {
+    addAfterSignIn = true;
+    try { await authClient?.signIn(); }
+    catch (error) { addAfterSignIn = false; showToast(error.message); }
+    return;
+  }
+  if (!el.addDialog.open) el.addDialog.showModal();
+  el.input.focus({ preventScroll: true });
+}
+
+function setRecipeSubmitting(value) {
+  submittingRecipe = value;
+  el.form.setAttribute('aria-busy', String(value));
+  el.input.readOnly = value;
+  const button = el.form.querySelector('button[type="submit"]');
+  button.disabled = value;
+  if (!value) button.querySelector('span').textContent = state.isSignedIn ? 'Feed him!' : 'Sign in to add';
+}
+
+el.addButton.addEventListener('click', () => { void openAddRecipe(); });
+document.getElementById('add-recipe-close').addEventListener('click', () => el.addDialog.close());
+el.addDialog.addEventListener('click', (event) => { if (event.target === el.addDialog) el.addDialog.close(); });
+el.toolbar.querySelector('.toolbar-brand').addEventListener('click', (event) => {
+  event.preventDefault();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+});
 
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -828,6 +885,7 @@ function renderAccountProfile() {
   if (!state.profile) return;
   el.accountAvatar.innerHTML = avatarTemplate(state.profile, 'avatar-account');
   el.accountLabel.textContent = state.profile.displayName;
+  el.account.setAttribute('aria-label', `Profile: ${state.profile.displayName}`);
   el.floatingRecipeboy.innerHTML = avatarTemplate(state.profile, 'avatar-floating');
 }
 
@@ -997,6 +1055,7 @@ async function restoreRecipe(deletedRecipe) {
 
 async function submitRecipe(event) {
   event.preventDefault();
+  if (submittingRecipe) return;
   if (!state.isSignedIn) {
     await authClient?.signIn();
     return;
@@ -1004,25 +1063,25 @@ async function submitRecipe(event) {
   const input = el.input.value.trim();
   if (!input) return;
   const button = el.form.querySelector('button[type="submit"]');
-  button.disabled = true;
+  setRecipeSubmitting(true);
   button.querySelector('span').textContent = /^https?:\/\//i.test(input) ? 'Reading that page…' : 'Tidying your notes…';
   el.status.hidden = true;
   try {
     const result = await normalizeInput(input, button);
     state.recipes.unshift(result.recipe);
     el.input.value = '';
-    el.status.textContent = `Saved “${result.recipe.title}” to the shared box.`;
-    el.status.className = 'form-status success';
-    el.status.hidden = false;
+    el.status.hidden = true;
     render();
+    el.addDialog.close();
     openRecipe(result.recipe.id);
+    showToast(`Saved “${result.recipe.title}”.`);
   } catch (error) {
     el.status.textContent = error.message;
     el.status.className = 'form-status';
     el.status.hidden = false;
+    if (!el.addDialog.open) showToast(error.message);
   } finally {
-    button.disabled = false;
-    button.querySelector('span').textContent = 'Feed him!';
+    setRecipeSubmitting(false);
   }
 }
 
@@ -1149,6 +1208,7 @@ async function handleAction(event) {
 }
 
 el.form.addEventListener('submit', submitRecipe);
+el.input.addEventListener('input', () => { if (!submittingRecipe) el.status.hidden = true; });
 el.grid.addEventListener('click', handleAction);
 el.grid.addEventListener('keydown', (event) => {
   if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-open]')) {
@@ -1282,8 +1342,11 @@ el.feedDialog?.addEventListener('click', (event) => {
 async function saveClippedRecipe() {
   const clippedRecipe = bookmarkletPayload();
   if (!clippedRecipe?.text) return;
+  el.input.value = String(clippedRecipe.text).slice(0, 50_000);
+  await openAddRecipe();
+  el.status.hidden = true;
   const button = el.form.querySelector('button[type="submit"]');
-  button.disabled = true;
+  setRecipeSubmitting(true);
   button.querySelector('span').textContent = 'Saving from your browser…';
   try {
     const result = await normalizeInput(String(clippedRecipe.text), button, {
@@ -1292,18 +1355,19 @@ async function saveClippedRecipe() {
     });
     state.recipes.unshift(result.recipe);
     render();
-    el.status.textContent = `Saved “${result.recipe.title}” from your browser.`;
-    el.status.className = 'form-status success';
-    el.status.hidden = false;
+    el.input.value = '';
+    el.status.hidden = true;
+    el.addDialog.close();
     openRecipe(result.recipe.id);
+    showToast(`Saved “${result.recipe.title}” from your browser.`);
   } catch (error) {
     el.input.value = String(clippedRecipe.text).slice(0, 50_000);
     el.status.textContent = `${error.message} The captured text is in the box so you can tidy it and try again.`;
     el.status.className = 'form-status';
     el.status.hidden = false;
+    if (!el.addDialog.open) showToast('Import failed. Open Add recipe to retry your saved text.');
   } finally {
-    button.disabled = false;
-    button.querySelector('span').textContent = 'Feed him!';
+    setRecipeSubmitting(false);
   }
 }
 
@@ -1345,6 +1409,7 @@ async function showSignedOut() {
   el.appMain.hidden = false;
   el.appMain.inert = false;
   el.input.disabled = true;
+  el.addButton.disabled = false;
   el.form.querySelector('button[type="submit"] span').textContent = 'Sign in to add';
   el.floatingRecipeboy.innerHTML = '<img src="assets/recipeboy-mascot.svg" alt="">';
   el.floatingRecipeboy.hidden = true;
@@ -1352,6 +1417,7 @@ async function showSignedOut() {
   if (el.editDialog.open) el.editDialog.close();
   if (el.statsDialog.open) el.statsDialog.close();
   if (el.feedDialog.open) el.feedDialog.close();
+  if (el.addDialog.open) el.addDialog.close();
   el.authControls.hidden = true;
   el.publicControls.hidden = false;
   el.bookmarkletDock.hidden = true;
@@ -1367,9 +1433,11 @@ async function showSignedIn(user) {
   el.appMain.hidden = false;
   el.appMain.inert = false;
   el.input.disabled = false;
+  el.addButton.disabled = false;
   el.form.querySelector('button[type="submit"] span').textContent = 'Feed him!';
   el.publicControls.hidden = true;
   el.accountLabel.textContent = user.label;
+  el.account.setAttribute('aria-label', `Profile: ${user.label}`);
   el.account.title = 'Customize your Recipeboy';
   if (loadedUserId === user.id) return;
   loadedUserId = user.id;
@@ -1387,6 +1455,10 @@ async function showSignedIn(user) {
   el.floatingRecipeboy.hidden = false;
   el.bookmarkletDock.hidden = bookmarkletWasDismissed();
   await loadSharedBox();
+  if (addAfterSignIn) {
+    addAfterSignIn = false;
+    if (!el.dialog.open) await openAddRecipe();
+  }
 }
 
 async function handleAuthChange(user) {
