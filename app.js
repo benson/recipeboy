@@ -115,7 +115,7 @@ const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
 
-const SKELETON_CARD = '<article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-source"></i><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>';
+const SKELETON_CARD = '<article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-attribution"><i></i><i></i></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>';
 
 function prepareAppLoading() {
   el.appMain.classList.add('app-loading');
@@ -497,7 +497,8 @@ function closeDetailMenus(except = null) {
 
 function cardTemplate(recipe) {
   const time = minutesLabel(recipe);
-  const source = recipe.sourceName || (recipe.sourceUrl ? 'From the web' : 'Friends’ recipe');
+  const sourceUrl = safeUrl(recipe.sourceUrl);
+  const source = sourceUrl ? (recipe.sourceName || 'Original recipe') : '';
   const allMakers = recipe.makers || [];
   const makers = allMakers.slice(0, 4);
   const makerNames = allMakers.map((maker) => maker.displayName).filter(Boolean);
@@ -510,7 +511,6 @@ function cardTemplate(recipe) {
     <div class="card-color"></div>
     ${firstPhoto ? `<div class="card-photo"><img src="${esc(recipePhotoUrl(firstPhoto))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"></div>` : ''}
     <div class="card-body" data-open="${esc(recipe.id)}" tabindex="0" role="button" aria-label="Open ${esc(recipe.title)}">
-      <span class="source-label">${esc(source)}</span>
       <h3>${esc(recipe.title)}</h3>
       <p class="card-description">${esc(recipe.description || 'A recipe worth keeping.')}</p>
       <div class="card-meta">
@@ -520,8 +520,10 @@ function cardTemplate(recipe) {
       </div>
       <div class="card-rating ${recipe.ratingCount ? '' : 'unrated'}" aria-label="${esc(ratingSummary(recipe))}"><span aria-hidden="true">★</span><strong>${recipe.ratingCount ? Number(recipe.ratingAverage).toFixed(1) : 'New'}</strong><small>${recipe.ratingCount ? `${recipe.ratingCount} rating${recipe.ratingCount === 1 ? '' : 's'}` : 'Not rated yet'}</small></div>
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
-      <div class="card-contributor">${recipe.addedBy ? avatarTemplate(recipe.addedBy, 'avatar-tiny') : ''}<span><small>Added by</small><strong>${esc(addedBy || 'an early Recipeboy friend')}</strong></span></div>
-      <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${esc(cookedBy)}"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${esc(cookedBy)}</strong></span></div>
+    </div>
+    <div class="card-attribution">
+      <div class="card-attribution-row card-contributor">${recipe.addedBy ? avatarTemplate(recipe.addedBy, 'avatar-tiny') : '<span class="avatar-placeholder" aria-hidden="true"></span>'}<span><small>Added by</small><strong>${esc(addedBy || 'an early Recipeboy friend')}${source ? ` <span class="source-separator" aria-hidden="true">·</span> <a class="card-source" href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="View original recipe from ${esc(source)}">${esc(source)} ↗</a>` : ''}</strong></span></div>
+      <div class="card-attribution-row card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${esc(cookedBy)}"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${esc(cookedBy)}</strong></span></div>
     </div>
     ${state.isSignedIn ? `<div class="card-actions card-actions-three">
       <button data-save-list="${esc(recipe.id)}">Add to list</button>
@@ -709,6 +711,8 @@ function socialTemplate(recipe) {
 
 function detailTemplate(recipe) {
   const sourceUrl = safeUrl(recipe.sourceUrl);
+  const source = sourceUrl ? (recipe.sourceName || 'Original recipe') : '';
+  const addedBy = recipe.addedBy?.displayName || 'an early Recipeboy friend';
   const scale = state.activeScale || 1;
   const ingredients = recipe.ingredients.map((ingredient) => {
     const quantity = [scaleAmount(ingredient.amount, scale), ingredient.unit].filter(Boolean).join(' ');
@@ -719,12 +723,12 @@ function detailTemplate(recipe) {
   const photos = recipe.photos || [];
   const deleteConfirming = state.confirmDeleteId === recipe.id;
   return `<div class="detail-hero">
-      <span class="source-label">${esc(recipe.sourceName || 'Friends’ recipe')}</span>
       <h2>${esc(recipe.title)}</h2>
       ${recipe.description ? `<p>${esc(recipe.description)}</p>` : ''}
       <div class="detail-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
         ${yieldLabel(recipe) ? `<span class="meta-item" ${recipe.metadataEstimates?.includes('yield') ? 'title="Estimated servings"' : ''}>♨ ${esc(yieldLabel(recipe, scaleYield(normalizeYield(recipe.yield), scale)))}</span>` : ''}
+        <span class="meta-item detail-attribution">Added by ${esc(addedBy)}${source ? ` · <a href="${esc(sourceUrl)}" target="_blank" rel="noopener">${esc(source)} ↗</a>` : ''}</span>
       </div>
       ${(recipe.tags || []).length ? `<div class="detail-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
