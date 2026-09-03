@@ -1,3 +1,5 @@
+import { normalizeYield } from '../recipe-metadata.js';
+
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
 const MAX_REQUEST_BODY = 256_000;
@@ -198,8 +200,9 @@ function toArray(value) {
 }
 
 function parseDuration(value) {
-  if (typeof value === 'number') return Math.max(0, Math.round(value));
+  if (typeof value === 'number') return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
   const text = String(value || '').trim();
+  if (/^\d+(?:\.\d+)?$/.test(text)) return Math.round(Number(text));
   const iso = text.match(/^P(?:([\d.]+)D)?(?:T(?:([\d.]+)H)?(?:([\d.]+)M)?)?$/i);
   if (iso) return Math.round((Number(iso[1] || 0) * 1440) + (Number(iso[2] || 0) * 60) + Number(iso[3] || 0));
   const hours = Number(text.match(/([\d.]+)\s*(?:hours?|hrs?)/i)?.[1] || 0);
@@ -310,7 +313,7 @@ function normalizeRecipe(raw, sourceUrl = '') {
   const recipe = {
     title: cleanText(raw.name || raw.title || 'Untitled recipe', 160),
     description: cleanText(raw.description, 600),
-    yield: cleanText(toArray(raw.recipeYield || raw.yield)[0], 80),
+    yield: normalizeYield(toArray(raw.recipeYield ?? raw.yield ?? raw.servings).map((value) => cleanText(value, 80))),
     prepMinutes: parseDuration(raw.prepTime || raw.prepMinutes),
     cookMinutes: parseDuration(raw.cookTime || raw.cookMinutes),
     totalMinutes: parseDuration(raw.totalTime || raw.totalMinutes),
@@ -851,6 +854,7 @@ function rowToRecipe(row) {
   return {
     id: row.id,
     ...recipe,
+    yield: normalizeYield(recipe.yield),
     madeCount: row.made_count,
     madeByViewer: Boolean(row.made_by_viewer),
     eatenByViewer: Boolean(row.eaten_by_viewer),
@@ -1122,7 +1126,7 @@ async function updateRecipe(id, request, env, userId) {
     ...original,
     title,
     description: cleanText(body.description, 1000),
-    yield: cleanText(body.yield, 100),
+    yield: normalizeYield(cleanText(body.yield, 100)),
     prepMinutes,
     cookMinutes,
     totalMinutes,
@@ -1130,6 +1134,8 @@ async function updateRecipe(id, request, env, userId) {
     instructions,
     tags,
   });
+  // User edits replace only the estimates they actually changed.
+  recipe.metadataEstimates = (original.metadataEstimates || []).filter((field) => recipe[field] === original[field]);
   await env.DB.prepare('UPDATE recipes SET title = ?, data_json = ? WHERE id = ?')
     .bind(recipe.title, JSON.stringify(recipe), id).run();
   return json({ recipe: { id, ...recipe, canEdit: true } });

@@ -4,6 +4,12 @@ A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe 
 
 Reviews require an explicit cooked/ate choice in the current UI. The Worker records that choice and its participation record atomically. Repeated actions or review edits do not double-count people. Historical reviews are left unclassified and all previous cook counts are preserved. Apply `worker/migrations/0007_recipe_eats.sql` once to an existing database before deploying this version. The Feed includes eating as a distinct activity.
 
+### Metadata cleanup
+
+`0008_recipe_metadata_cleanup.sql` is a guarded, repeat-safe repair of the existing recipe box, including the requested halal-cart legacy-count correction. Unknown yields are now blank instead of zero; plain numeric yields display as servings. Numeric-string durations are accepted on import. Existing recipe content and social records are preserved.
+
+Missing metadata was reviewed against the saved ingredients/method and, for Arroz Caldo, its [linked Panlasang Pinoy recipe](https://panlasangpinoy.com/chicken-arroz-caldo-recipe-glutinous-rice-porridge/). `metadataEstimates` lists approximate fields, displayed with **≈**, rather than presenting inferred values as source facts. Salpicowww's 500 g beef suggests about four servings; Shepherd’s Pie's 1 lb meat and 3 cups mash suggests four to six. Timing estimates cover preparation and the stated cooking stages: salmon about 30 minutes; Shepherd’s Pie about 60; Arroz Caldo about 70 (its source describes a 35–50 minute simmer but gives no total); pumpkin pie about 5½ hours including roasting, chilling, draining, and cooling. The quantity-free salmon note intentionally has no serving count. Unchanged metadata retains its original values. Editing an estimated field clears only that field's estimate marker.
+
 The recipe box is shared by signed-in friends. Clerk handles browser sign-in and the Worker verifies every session JWT before allowing recipe reads or writes. Mutation endpoints are also rate-limited, oversized requests and recipe pages are rejected, redirects are revalidated before fetching, and deleted recipes are soft-deleted so the UI can offer Undo. All recipe content is escaped before browser rendering and is never executed as code.
 
 The static frontend is hosted by GitHub Pages at [recipeboy.bensonperry.com](https://recipeboy.bensonperry.com/). A small Cloudflare Worker uses D1 for shared recipe data, R2 for compressed cooking photos, and extracts schema.org Recipe data from pasted links.

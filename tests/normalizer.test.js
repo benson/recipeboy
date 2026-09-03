@@ -201,7 +201,7 @@ Instructions:
 2. Add everything to a pot.
 3. Simmer for 30 minutes.`);
   assert.equal(recipe.title, "Kim's Weeknight Chili");
-  assert.equal(recipe.yield, '6');
+  assert.equal(recipe.yield, '6 servings');
   assert.equal(recipe.prepMinutes, 10);
   assert.equal(recipe.ingredients.length, 3);
   assert.equal(recipe.instructions.length, 3);

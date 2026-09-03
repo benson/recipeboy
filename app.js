@@ -1,4 +1,5 @@
 import { initAuth } from './auth.js?v=2';
+import { normalizeYield, yieldLabel, timeIsEstimated } from './recipe-metadata.js?v=1';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
@@ -223,10 +224,11 @@ function bookmarkletPayload() {
 function minutesLabel(recipe) {
   const minutes = recipe.totalMinutes || ((recipe.prepMinutes || 0) + (recipe.cookMinutes || 0));
   if (!minutes) return '';
-  if (minutes < 60) return `${minutes} min`;
+  const prefix = timeIsEstimated(recipe) ? '≈ ' : '';
+  if (minutes < 60) return `${prefix}${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
+  return prefix + (remainder ? `${hours} hr ${remainder} min` : `${hours} hr`);
 }
 
 function ingredientText(ingredient) {
@@ -457,7 +459,7 @@ function cardTemplate(recipe) {
       <p class="card-description">${esc(recipe.description || 'A recipe worth keeping.')}</p>
       <div class="card-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
-        ${recipe.yield ? `<span class="meta-item">♨ ${esc(recipe.yield)}</span>` : ''}
+        ${yieldLabel(recipe) ? `<span class="meta-item" ${recipe.metadataEstimates?.includes('yield') ? 'title="Estimated servings"' : ''}>♨ ${esc(yieldLabel(recipe))}</span>` : ''}
         <span class="meta-item">${recipe.ingredients.length} ingredients</span>
       </div>
       <div class="card-rating ${recipe.ratingCount ? '' : 'unrated'}" aria-label="${esc(ratingSummary(recipe))}"><span aria-hidden="true">★</span><strong>${recipe.ratingCount ? Number(recipe.ratingAverage).toFixed(1) : 'New'}</strong><small>${recipe.ratingCount ? `${recipe.ratingCount} rating${recipe.ratingCount === 1 ? '' : 's'}` : 'Not rated yet'}</small></div>
@@ -483,7 +485,7 @@ function render() {
   el.grid.innerHTML = recipes.map(cardTemplate).join('');
   const total = state.recipes.length;
   const activeList = state.lists.find((list) => list.id === state.listId);
-  el.count.textContent = activeList ? `${recipes.length} recipe${recipes.length === 1 ? '' : 's'} in ${activeList.name}` : (total ? `${total} keeper${total === 1 ? '' : 's'} in the shared box` : 'No recipes in the box yet');
+  el.count.textContent = activeList ? `${recipes.length} recipe${recipes.length === 1 ? '' : 's'} in ${activeList.name}` : `${total} saved recipe${total === 1 ? '' : 's'}`;
   el.empty.hidden = recipes.length > 0;
   if (!recipes.length && (state.query || state.tag)) {
     el.empty.querySelector('h3').textContent = 'No bites found.';
@@ -495,7 +497,7 @@ function render() {
 }
 
 function listDialogTemplate(recipe) {
-  return `<div class="list-hero"><span class="social-eyebrow">Your recipe lists</span><h2>Save this keeper</h2><p>${esc(recipe.title)}</p></div>
+  return `<div class="list-hero"><h2>Add to list</h2><p>${esc(recipe.title)}</p></div>
     <div class="list-dialog-body">
       <div class="list-choices" aria-label="Choose lists">
         ${state.lists.length ? state.lists.map((list) => `<div class="list-choice ${state.listEditId === list.id ? 'editing' : ''}">
@@ -607,7 +609,7 @@ function socialTemplate(recipe) {
       </div>
       ${state.isSignedIn ? `<form class="review-form" data-review-form="${esc(recipe.id)}">
         <fieldset class="review-experience">
-          <legend>Your seat at the table</legend>
+          <legend class="sr-only">Your experience</legend>
           <div class="experience-options">
             <label><input type="radio" name="experience" value="cooked" required ${experience === 'cooked' ? 'checked' : ''}><span>I cooked it</span></label>
             <label><input type="radio" name="experience" value="ate" required ${experience === 'ate' ? 'checked' : ''}><span>I ate it</span></label>
@@ -666,14 +668,14 @@ function detailTemplate(recipe) {
       ${recipe.description ? `<p>${esc(recipe.description)}</p>` : ''}
       <div class="detail-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
-        ${recipe.yield ? `<span class="meta-item">♨ ${esc(scaleYield(recipe.yield, scale))}</span>` : ''}
+        ${yieldLabel(recipe) ? `<span class="meta-item" ${recipe.metadataEstimates?.includes('yield') ? 'title="Estimated servings"' : ''}>♨ ${esc(yieldLabel(recipe, scaleYield(normalizeYield(recipe.yield), scale)))}</span>` : ''}
       </div>
       ${(recipe.tags || []).length ? `<div class="detail-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="detail-actions">
       <div class="detail-primary-actions">
         <div class="detail-scale" data-detail-more>
-          <button class="action-button detail-more-button scale-toggle" type="button" aria-expanded="false" aria-controls="recipe-scale-panel" aria-label="Scale recipe, currently ${esc(friendlyNumber(scale))} times" title="Scale recipe">${esc(friendlyNumber(scale))}× <span aria-hidden="true">⌄</span></button>
+          <button class="action-button detail-more-button scale-toggle" type="button" aria-expanded="false" aria-controls="recipe-scale-panel" aria-label="Scale recipe, currently ${esc(friendlyNumber(scale))} times" title="Scale recipe">${esc(friendlyNumber(scale))}× <svg class="dropdown-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4"/></svg></button>
           <div class="detail-more-menu scale-menu" id="recipe-scale-panel" role="group" aria-label="Scale recipe quantities" hidden><span class="scale-label">Recipe size</span><div class="recipe-scale"><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong aria-live="polite">${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div></div>
         </div>
         <button class="action-button detail-secondary-action" data-copy="${esc(recipe.id)}" aria-label="Copy shopping list">Copy list</button>
@@ -1020,7 +1022,7 @@ async function submitRecipe(event) {
     el.status.hidden = false;
   } finally {
     button.disabled = false;
-    button.querySelector('span').textContent = 'Normalize it!';
+    button.querySelector('span').textContent = 'Feed him!';
   }
 }
 
@@ -1301,7 +1303,7 @@ async function saveClippedRecipe() {
     el.status.hidden = false;
   } finally {
     button.disabled = false;
-    button.querySelector('span').textContent = 'Normalize it!';
+    button.querySelector('span').textContent = 'Feed him!';
   }
 }
 
@@ -1365,7 +1367,7 @@ async function showSignedIn(user) {
   el.appMain.hidden = false;
   el.appMain.inert = false;
   el.input.disabled = false;
-  el.form.querySelector('button[type="submit"] span').textContent = 'Normalize it!';
+  el.form.querySelector('button[type="submit"] span').textContent = 'Feed him!';
   el.publicControls.hidden = true;
   el.accountLabel.textContent = user.label;
   el.account.title = 'Customize your Recipeboy';
