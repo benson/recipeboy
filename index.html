@@ -27,8 +27,9 @@
   <link rel="icon" href="assets/recipeboy-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="assets/feed-recipeboy-button-2x.png" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=47">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -60,7 +61,10 @@
       <div class="burst burst-two" aria-hidden="true">TIDY!</div>
     </div>
     <div id="hero-add-slot" class="hero-add-slot">
-      <button id="add-recipe-button" class="add-recipe-button" type="button" aria-haspopup="dialog" aria-controls="add-recipe-dialog" disabled><span aria-hidden="true">+</span> Add recipe</button>
+      <button id="add-recipe-button" class="add-recipe-button" type="button" aria-label="Feed Recipeboy a recipe" aria-haspopup="dialog" aria-controls="add-recipe-dialog" disabled>
+        <img class="add-recipe-art" src="assets/feed-recipeboy-button-2x.png" alt="" aria-hidden="true">
+        <span class="add-recipe-compact-label">Add recipe</span>
+      </button>
     </div>
   </header>
 
