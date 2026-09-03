@@ -466,9 +466,9 @@ function cardTemplate(recipe) {
       <div class="card-makers ${makers.length ? '' : 'empty'}" aria-label="Cooked by ${esc(cookedBy)}"><span class="avatar-stack">${makers.map((maker) => avatarTemplate(maker, 'avatar-tiny')).join('')}</span><span><small>Cooked by</small><strong>${esc(cookedBy)}</strong></span></div>
     </div>
     ${state.isSignedIn ? `<div class="card-actions card-actions-three">
-      <button data-copy="${esc(recipe.id)}">Copy list</button>
-      <button data-save-list="${esc(recipe.id)}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
-      <button data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>
+      <button data-save-list="${esc(recipe.id)}">Add to list</button>
+      <button data-eaten="${esc(recipe.id)}" aria-label="${recipe.eatenByViewer ? 'You already ate this' : 'I ate this'}" ${recipe.eatenByViewer ? 'disabled' : ''}>I ate this</button>
+      <button data-made="${esc(recipe.id)}" aria-label="${recipe.madeByViewer ? 'You already cooked this' : 'I cooked this'}" ${recipe.madeByViewer ? 'disabled' : ''}>I cooked this</button>
     </div>` : `<div class="card-actions card-actions-view-only">
       <button data-open="${esc(recipe.id)}">View recipe</button>
       <button data-sign-in>Sign in to save or cook</button>
@@ -672,17 +672,22 @@ function detailTemplate(recipe) {
     </div>
     <div class="detail-actions">
       <div class="detail-primary-actions">
-        <div class="recipe-scale" role="group" aria-label="Scale recipe quantities"><span>Scale</span><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong>${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div>
-        <button class="action-button" data-copy="${esc(recipe.id)}" aria-label="Copy shopping list">Copy list</button>
-        ${state.isSignedIn ? `<button class="action-button" data-save-list="${esc(recipe.id)}" aria-label="${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved to recipe lists' : 'Save to a recipe list'}">${state.lists.some((list) => list.recipeIds.includes(recipe.id)) ? 'Saved' : 'Save'}</button>
+        <div class="detail-scale" data-detail-more>
+          <button class="action-button detail-more-button scale-toggle" type="button" aria-expanded="false" aria-controls="recipe-scale-panel" aria-label="Scale recipe, currently ${esc(friendlyNumber(scale))} times" title="Scale recipe">${esc(friendlyNumber(scale))}× <span aria-hidden="true">⌄</span></button>
+          <div class="detail-more-menu scale-menu" id="recipe-scale-panel" role="group" aria-label="Scale recipe quantities" hidden><span class="scale-label">Recipe size</span><div class="recipe-scale"><button type="button" data-scale-step="-1" aria-label="Scale recipe down" ${scale <= .5 ? 'disabled' : ''}>−</button><strong aria-live="polite">${esc(friendlyNumber(scale))}×</strong><button type="button" data-scale-step="1" aria-label="Scale recipe up" ${scale >= 4 ? 'disabled' : ''}>+</button></div></div>
+        </div>
+        <button class="action-button detail-secondary-action" data-copy="${esc(recipe.id)}" aria-label="Copy shopping list">Copy list</button>
+        ${state.isSignedIn ? `<button class="action-button detail-secondary-action" data-save-list="${esc(recipe.id)}">Add to list</button>
         <div class="detail-experience-actions" role="group" aria-label="Your meal">
-          <button class="action-button made" data-made="${esc(recipe.id)}" ${recipe.madeByViewer ? 'disabled' : ''}>${recipe.madeByViewer ? 'You cooked this' : 'I cooked this'} · ${recipe.madeCount || 0}</button>
-          <button class="action-button eaten" data-eaten="${esc(recipe.id)}" ${recipe.eatenByViewer ? 'disabled' : ''}>${recipe.eatenByViewer ? 'You ate this' : 'I ate this'} · ${recipe.eatenCount || 0}</button>
-        </div>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in to cook, taste, or rate</button>'}
+          <button class="action-button eaten" data-eaten="${esc(recipe.id)}" aria-label="${recipe.eatenByViewer ? 'You already ate this' : 'I ate this'}; ${recipe.eatenCount || 0} tasters" ${recipe.eatenByViewer ? 'disabled' : ''}>Ate!<span class="detail-action-count" aria-hidden="true"> · ${recipe.eatenCount || 0}</span></button>
+          <button class="action-button made" data-made="${esc(recipe.id)}" aria-label="${recipe.madeByViewer ? 'You already cooked this' : 'I cooked this'}; ${recipe.madeCount || 0} cooks" ${recipe.madeByViewer ? 'disabled' : ''}>Cooked!<span class="detail-action-count" aria-hidden="true"> · ${recipe.madeCount || 0}</span></button>
+        </div>` : '<button class="action-button viewer-sign-in" type="button" data-sign-in>Sign in</button>'}
       </div>
       <div class="detail-more" data-detail-more>
-        <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions">More <span class="detail-more-dots" aria-hidden="true">•••</span></button>
+        <button class="action-button detail-more-button" type="button" aria-haspopup="menu" aria-expanded="${deleteConfirming}" aria-label="More recipe actions"><span class="detail-more-label">More</span><span class="detail-more-dots" aria-hidden="true">•••</span></button>
         <div class="detail-more-menu" role="menu" ${deleteConfirming ? '' : 'hidden'}>
+          <button class="detail-overflow-action" type="button" role="menuitem" data-copy="${esc(recipe.id)}"><span>Copy shopping list</span></button>
+          ${state.isSignedIn ? `<button class="detail-overflow-action" type="button" role="menuitem" data-save-list="${esc(recipe.id)}"><span>Add to list</span></button>` : ''}
           <button type="button" role="menuitem" data-share="${esc(recipe.id)}"><span>Copy recipe link</span><span class="detail-menu-icon" aria-hidden="true">↗</span></button>
           ${sourceUrl ? `<a role="menuitem" href="${esc(sourceUrl)}" target="_blank" rel="noopener"><span>View original recipe</span><span class="detail-menu-icon" aria-hidden="true">↗</span></a>` : ''}
           ${recipe.canEdit ? `<button type="button" role="menuitem" data-edit-recipe="${esc(recipe.id)}"><span>Edit recipe</span><span class="detail-menu-icon" aria-hidden="true">✎</span></button>` : ''}
@@ -721,10 +726,18 @@ function refreshDialog() {
 }
 
 function adjustRecipeScale(direction) {
+  const scaleOpen = el.dialogContent.querySelector('.scale-toggle')?.getAttribute('aria-expanded') === 'true';
   const scales = [.5, 1, 1.5, 2, 3, 4];
   const current = Math.max(0, scales.indexOf(state.activeScale));
   state.activeScale = scales[Math.max(0, Math.min(scales.length - 1, current + direction))];
   refreshDialog();
+  if (scaleOpen) {
+    el.dialogContent.querySelector('.scale-menu').hidden = false;
+    const toggle = el.dialogContent.querySelector('.scale-toggle');
+    toggle.setAttribute('aria-expanded', 'true');
+    const step = el.dialogContent.querySelector(`[data-scale-step="${direction}"]`);
+    (step.disabled ? toggle : step).focus({ preventScroll: true });
+  }
 }
 
 function editRecipeTemplate(recipe) {
@@ -924,7 +937,8 @@ async function markEaten(id) {
     const result = await api(`/recipes/${encodeURIComponent(id)}/ate`, { method: 'POST' });
     Object.assign(recipe, result);
     render();
-    refreshDialog();
+    if (!el.dialog.open || state.activeId !== id) openRecipe(id);
+    else refreshDialog();
     const form = el.dialogContent.querySelector('[data-review-form]');
     if (form) {
       form.querySelector('input[value="ate"]').checked = true;
@@ -1190,7 +1204,11 @@ document.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    if (document.querySelector('.detail-more-menu:not([hidden])')) event.preventDefault();
+    const openDetailMenu = document.querySelector('.detail-more-menu:not([hidden])');
+    if (openDetailMenu) {
+      event.preventDefault();
+      openDetailMenu.closest('[data-detail-more]').querySelector('.detail-more-button').focus();
+    }
     closeCustomSelects();
     closeDetailMenus();
   }
