@@ -627,24 +627,24 @@ footer { height: 12px; background: var(--navy); }
 
 @media (max-width: 590px) {
   .bookmarklet-dock { display: none; }
-  .toolbar-inner { width: calc(100% - 24px); min-height: 72px; padding-top: 13px; padding-bottom: 17px; }
+  .toolbar-inner { width: calc(100% - 20px); min-height: 64px; padding-top: 8px; padding-bottom: 11px; }
+  .toolbar-brand { display: block; visibility: visible; margin-right: auto; font-size: 17px; }
+  .is-docked .toolbar-brand { display: none; }
   .auth-controls, .public-controls { gap: 5px; }
-  .account-button { min-height: 42px; padding-right: 6px; }
+  .account-button { min-height: 40px; padding: 3px 5px; }
   .account-button #account-label { display: none; }
-  .stats-button, .feed-button { min-height: 42px; padding: 6px 8px; font-size: 11px; }
-  .toolbar-add-slot .add-recipe-button { min-height: 42px; padding: 7px 10px; font-size: 12px; }
+  .stats-button, .feed-button { min-height: 40px; padding: 6px 8px; font-size: 11px; }
+  .toolbar-add-slot .add-recipe-button { min-height: 40px; padding: 6px 9px; font-size: 11px; }
   .stats-label-full { display: none; }
   .stats-label-short { display: inline; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
   .auth-gate img { width: 120px; }
   .auth-gate .primary-button { width: 100%; }
-  .hero { min-height: 335px; }
-  .hero-copy { top: 90px; right: 16px; width: 190px; }
-  .hero h1 { font-size: 48px; }
-  .hero h1 span { margin-left: 25px; }
-  .hero .mascot-stage { top: 72px; left: 18px; width: 150px; }
-  .hero-add-slot { bottom: 20px; left: 50%; width: min(300px, 78vw); }
-  .burst-one { top: 8px; right: 24px; }
+  .hero { min-height: 255px; background-image: repeating-conic-gradient(from -8deg at 52% 58%, rgba(255,255,255,.27) 0 8deg, transparent 8deg 17deg); }
+  .hero-copy { display: none; }
+  .hero .mascot-stage { top: 70px; left: 16px; width: clamp(116px, 34vw, 150px); }
+  .hero-add-slot { top: 88px; right: 12px; bottom: auto; left: auto; width: min(58vw, 270px); transform: none; }
+  .burst-one { top: -3px; right: -5px; padding: 8px 7px; border-width: 3px; font-size: 11px; }
   main { width: min(100% - 22px, 1120px); margin-top: 20px; }
   .collection-head, .form-footer { align-items: stretch; flex-direction: column; }
   form { padding-left: 18px; padding-right: 18px; }
@@ -705,10 +705,10 @@ footer { height: 12px; background: var(--navy); }
 }
 
 @media (max-width: 360px) {
-  .hero-copy { top: 96px; right: 8px; width: 160px; }
-  .hero h1 { font-size: 42px; }
-  .hero h1 span { margin-left: 20px; }
-  .hero .mascot-stage { top: 80px; left: 10px; width: 122px; }
+  .toolbar-inner { width: calc(100% - 14px); }
+  .toolbar-brand { font-size: 15px; }
+  .hero .mascot-stage { left: 10px; width: 112px; }
+  .hero-add-slot { right: 8px; width: 57vw; }
 }
 
 @media (hover: hover) and (pointer: fine) {
