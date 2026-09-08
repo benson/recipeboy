@@ -2,6 +2,14 @@
 
 A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, meal photos, ratings, and separate per-person “I cooked this” and “I ate this” records. Friends can review and upload meal photos as either a cook or a taster. Eating never increments the cook count or cooking leaderboard. Recipe cards distinguish who added a recipe from the friends who cooked it, and the stats page celebrates the top contributors, cooks, and reviewers.
 
+### Photo viewing and recovery
+
+Click a card or gallery photo to enlarge it. The viewer supports previous/next photos, arrow keys, Escape, and a close button. Photo deletion lives under the viewer's **Photo options** button and requires confirmation, with **Keep photo** focused by default.
+
+**Profile → Recently deleted** restores shared recipes and photos, plus the signed-in user's own deleted lists and reviews. These deletions are retained indefinitely: there is no automatic expiry or in-app permanent-delete action. Recipe deletion preserves its related data; photo deletion now keeps both its D1 record and R2 object. List and review deletion archives the original data in the same transaction. Restoring never overwrites a newer review or a same-named list. Restore a deleted recipe before its separately deleted photos or reviews. This covers deletions after the migration, plus recipes already soft-deleted; it cannot recover photo files permanently deleted by older versions or undo edits.
+
+Apply `worker/migrations/0009_recoverable_deletions.sql` once to existing D1 databases, deploy the API, then publish the frontend. The fresh `schema.sql` already includes this change. Previously issued photo URLs may remain in browser caches; new image responses have a one-hour cache lifetime and check that the photo and recipe are active.
+
 The compact Add recipe button lives over the hero sun, opens the importer in a modal, and moves into the persistent navigation bar after it scrolls out of reach. The same button element is reparented between two slots so there is never a duplicate action or conflicting focus target. Closing the modal preserves an unsaved draft; successful imports clear it and open the saved recipe. Signed-out visitors can browse, and Add recipe starts sign-in before opening the form.
 
 Reviews require an explicit cooked/ate choice in the current UI. The Worker records that choice and its participation record atomically. Repeated actions or review edits do not double-count people. Historical reviews are left unclassified and all previous cook counts are preserved. Apply `worker/migrations/0007_recipe_eats.sql` once to an existing database before deploying this version. The Feed includes eating as a distinct activity.

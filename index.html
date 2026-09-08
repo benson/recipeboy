@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://clerk.recipeboy.bensonperry.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://clerk.recipeboy.bensonperry.com; img-src 'self' data: blob: https:; connect-src 'self' https://clerk.recipeboy.bensonperry.com https://recipeboy-api.bensonperry.workers.dev https://r.jina.ai https://cloudflareinsights.com http://127.0.0.1:8791 http://localhost:8791; frame-src https://clerk.recipeboy.bensonperry.com https://accounts.recipeboy.bensonperry.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://clerk.recipeboy.bensonperry.com https://accounts.recipeboy.bensonperry.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://clerk.recipeboy.bensonperry.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://clerk.recipeboy.bensonperry.com; img-src 'self' data: blob: https: http://127.0.0.1:8791 http://localhost:8791; connect-src 'self' https://clerk.recipeboy.bensonperry.com https://recipeboy-api.bensonperry.workers.dev https://r.jina.ai https://cloudflareinsights.com http://127.0.0.1:8791 http://localhost:8791; frame-src https://clerk.recipeboy.bensonperry.com https://accounts.recipeboy.bensonperry.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://clerk.recipeboy.bensonperry.com https://accounts.recipeboy.bensonperry.com">
   <title>Recipeboy — the friends' recipe box</title>
   <meta name="description" content="RECIPEBOY JOY">
   <meta name="recipeboy-clerk-publishable-key" content="pk_live_Y2xlcmsucmVjaXBlYm95LmJlbnNvbnBlcnJ5LmNvbSQ">
@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" href="assets/feed-recipeboy-button-2x.png" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="stylesheet" href="style.css?v=52">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -186,6 +186,53 @@
     </div>
   </dialog>
 
+  <dialog id="photo-dialog" class="photo-viewer" aria-labelledby="photo-viewer-title" aria-describedby="photo-viewer-caption">
+    <div class="photo-viewer-shell">
+      <header class="photo-viewer-header">
+        <h2 id="photo-viewer-title"></h2>
+        <div class="photo-viewer-tools">
+          <details id="photo-options" class="photo-options" hidden>
+            <summary aria-label="Photo options" title="Photo options">•••</summary>
+            <div class="photo-options-menu"><button id="photo-delete-request" type="button">Delete photo…</button></div>
+          </details>
+          <button id="photo-close" class="photo-viewer-button" type="button" aria-label="Close photo viewer" autofocus>×</button>
+        </div>
+      </header>
+      <div class="photo-viewer-stage">
+        <img id="photo-viewer-image" alt="">
+      </div>
+      <footer class="photo-viewer-footer">
+        <p id="photo-viewer-caption"></p>
+        <div class="photo-viewer-navigation">
+          <button id="photo-previous" class="photo-viewer-button" type="button" aria-label="Previous photo">←</button>
+          <span id="photo-viewer-position" role="status"></span>
+          <button id="photo-next" class="photo-viewer-button" type="button" aria-label="Next photo">→</button>
+        </div>
+      </footer>
+    </div>
+  </dialog>
+  <dialog id="photo-delete-dialog" class="photo-delete-dialog" aria-labelledby="photo-delete-title" aria-describedby="photo-delete-description">
+    <div class="dialog-shell photo-delete-shell">
+      <h2 id="photo-delete-title">Delete this photo?</h2>
+      <p id="photo-delete-description">It will be removed from this recipe for everyone. You can restore it from Recently deleted in your profile.</p>
+      <p id="photo-delete-error" role="alert" hidden></p>
+      <div class="photo-delete-actions">
+        <button id="photo-delete-cancel" class="action-button" type="button" autofocus>Keep photo</button>
+        <button id="photo-delete-confirm" class="action-button photo-delete-confirm" type="button">Delete photo</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="recovery-dialog" class="recovery-dialog" aria-labelledby="recovery-title" aria-describedby="recovery-description">
+    <div class="dialog-shell recovery-shell">
+      <button id="recovery-close" class="close-button" type="button" aria-label="Close recently deleted">×</button>
+      <h2 id="recovery-title">Recently deleted</h2>
+      <p id="recovery-description">A second chance for recipes and photos, plus your deleted lists and reviews. We keep them here until you restore them—nothing expires automatically.</p>
+      <p id="recovery-status" role="status"></p>
+      <ul id="recovery-items"></ul>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <aside id="bookmarklet-dock" class="bookmarklet-dock" aria-label="Bookmark helper" hidden>
     <button id="bookmarklet-dismiss" class="bookmarklet-dismiss" type="button" aria-label="Dismiss bookmark helper">×</button>
@@ -199,6 +246,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=40"></script>
+  <script type="module" src="app.js?v=41"></script>
 </body>
 </html>

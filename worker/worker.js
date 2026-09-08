@@ -913,6 +913,7 @@ async function listRecipes(env, userId) {
       FROM recipe_photos ph
       JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
       LEFT JOIN user_profiles p ON p.user_id = ph.user_id
+      WHERE ph.deleted_at IS NULL
       ORDER BY ph.created_at DESC
     `).all(),
     env.DB.prepare(`
@@ -1087,7 +1088,16 @@ async function saveReview(id, request, env, userId) {
 }
 
 async function deleteReview(id, env, userId) {
-  await env.DB.prepare('DELETE FROM recipe_reviews WHERE recipe_id = ? AND user_id = ?').bind(id, userId).run();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO deleted_items (id, kind, user_id, title, data_json, deleted_at)
+      SELECT ?, 'review', rr.user_id, r.title,
+        json_object('recipeId', rr.recipe_id, 'rating', rr.rating, 'text', rr.review_text,
+          'experience', rr.experience, 'createdAt', rr.created_at, 'updatedAt', rr.updated_at), ?
+      FROM recipe_reviews rr JOIN recipes r ON r.id = rr.recipe_id
+      WHERE rr.recipe_id = ? AND rr.user_id = ?`)
+      .bind(crypto.randomUUID(), new Date().toISOString(), id, userId),
+    env.DB.prepare('DELETE FROM recipe_reviews WHERE recipe_id = ? AND user_id = ?').bind(id, userId),
+  ]);
   return json(await recipeReviewSummary(id, env, userId));
 }
 
@@ -1226,6 +1236,12 @@ async function deleteRecipeList(listId, env, userId) {
   const list = await env.DB.prepare('SELECT id FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId).first();
   if (!list) return json({ error: 'List not found.' }, 404);
   await env.DB.batch([
+    env.DB.prepare(`INSERT INTO deleted_items (id, kind, user_id, title, data_json, deleted_at)
+      SELECT ?, 'list', user_id, name,
+        json_object('id', id, 'name', name, 'createdAt', created_at, 'updatedAt', updated_at,
+          'items', json((SELECT COALESCE(json_group_array(json_object('recipeId', recipe_id, 'createdAt', created_at)), '[]') FROM recipe_list_items WHERE list_id = ?))), ?
+      FROM recipe_lists WHERE id = ? AND user_id = ?`)
+      .bind(crypto.randomUUID(), listId, new Date().toISOString(), listId, userId),
     env.DB.prepare('DELETE FROM recipe_list_items WHERE list_id = ?').bind(listId),
     env.DB.prepare('DELETE FROM recipe_lists WHERE id = ? AND user_id = ?').bind(listId, userId),
   ]);
@@ -1237,7 +1253,7 @@ async function addRecipePhoto(id, request, env, userId) {
   if (!recipe) return json({ error: 'Recipe not found.' }, 404);
   const declaredLength = Number(request.headers.get('content-length') || 0);
   if (declaredLength > MAX_PHOTO_BYTES + 500_000) return json({ error: 'Keep each photo under 8 MB.' }, 413);
-  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_photos WHERE recipe_id = ?').bind(id).first();
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_photos WHERE recipe_id = ? AND deleted_at IS NULL').bind(id).first();
   if (Number(count?.count || 0) >= 12) return json({ error: 'This recipe already has twelve photos.' }, 400);
   let form;
   try { form = await request.formData(); }
@@ -1261,28 +1277,81 @@ async function addRecipePhoto(id, request, env, userId) {
 }
 
 async function deleteRecipePhoto(recipeId, photoId, env) {
-  const row = await env.DB.prepare(`
-    SELECT ph.object_key FROM recipe_photos ph
-    JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
-    WHERE ph.id = ? AND ph.recipe_id = ?
-  `).bind(photoId, recipeId).first();
+  const row = await env.DB.prepare(`UPDATE recipe_photos SET deleted_at = ?
+    WHERE id = ? AND recipe_id = ? AND deleted_at IS NULL
+      AND EXISTS (SELECT 1 FROM recipes WHERE id = ? AND deleted_at IS NULL)
+    RETURNING id`).bind(new Date().toISOString(), photoId, recipeId, recipeId).first();
   if (!row) return json({ error: 'Photo not found.' }, 404);
-  await env.PHOTOS.delete(row.object_key);
-  await env.DB.prepare('DELETE FROM recipe_photos WHERE id = ? AND recipe_id = ?').bind(photoId, recipeId).run();
   return json({ id: photoId, deleted: true });
 }
 
 async function serveRecipePhoto(objectKey, env) {
+  const active = await env.DB.prepare(`SELECT ph.id FROM recipe_photos ph
+    JOIN recipes r ON r.id = ph.recipe_id AND r.deleted_at IS NULL
+    WHERE ph.object_key = ? AND ph.deleted_at IS NULL`).bind(objectKey).first();
+  if (!active) return new Response('Not found', { status: 404, headers: cors() });
   const object = await env.PHOTOS.get(objectKey);
   if (!object) return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain', 'X-Content-Type-Options': 'nosniff' } });
   const headers = new Headers({
     'Access-Control-Allow-Origin': '*',
-    'Cache-Control': object.httpMetadata?.cacheControl || 'public, max-age=31536000, immutable',
+    'Cache-Control': 'public, max-age=3600',
     'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
     'ETag': object.httpEtag,
     'X-Content-Type-Options': 'nosniff',
   });
   return new Response(object.body, { headers });
+}
+
+async function recentlyDeleted(env, userId) {
+  const [recipes, photos, personal] = await Promise.all([
+    env.DB.prepare('SELECT id, title, deleted_at AS deletedAt FROM recipes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC').all(),
+    env.DB.prepare(`SELECT ph.id, ph.recipe_id AS recipeId, r.title, ph.deleted_at AS deletedAt,
+      (r.deleted_at IS NOT NULL) AS needsRecipe
+      FROM recipe_photos ph JOIN recipes r ON r.id = ph.recipe_id
+      WHERE ph.deleted_at IS NOT NULL ORDER BY ph.deleted_at DESC`).all(),
+    env.DB.prepare('SELECT id, kind, title, deleted_at AS deletedAt FROM deleted_items WHERE user_id = ? ORDER BY deleted_at DESC').bind(userId).all(),
+  ]);
+  return json({ items: [
+    ...recipes.results.map((item) => ({ ...item, kind: 'recipe' })),
+    ...photos.results.map((item) => ({ ...item, kind: 'photo' })),
+    ...personal.results,
+  ].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt)) });
+}
+
+async function restoreRecipePhoto(recipeId, photoId, env) {
+  const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(recipeId).first();
+  if (!recipe) return json({ error: 'Restore the recipe first, then its photo.' }, 409);
+  const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_photos WHERE recipe_id = ? AND deleted_at IS NULL').bind(recipeId).first();
+  if (Number(count?.count || 0) >= 12) return json({ error: 'This recipe already has twelve photos. Remove one before restoring another.' }, 409);
+  const restored = await env.DB.prepare('UPDATE recipe_photos SET deleted_at = NULL WHERE id = ? AND recipe_id = ? AND deleted_at IS NOT NULL RETURNING id').bind(photoId, recipeId).first();
+  return restored ? json({ id: photoId, restored: true }) : json({ error: 'Photo not found or already restored.' }, 404);
+}
+
+async function restorePersonalItem(id, env, userId) {
+  const archived = await env.DB.prepare('SELECT kind, data_json FROM deleted_items WHERE id = ? AND user_id = ?').bind(id, userId).first();
+  if (!archived) return json({ error: 'Deleted item not found.' }, 404);
+  const data = JSON.parse(archived.data_json);
+  const statements = [];
+  if (archived.kind === 'review') {
+    const recipe = await env.DB.prepare('SELECT id FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(data.recipeId).first();
+    if (!recipe) return json({ error: 'Restore the recipe before restoring this review.' }, 409);
+    const existing = await env.DB.prepare('SELECT recipe_id FROM recipe_reviews WHERE recipe_id = ? AND user_id = ?').bind(data.recipeId, userId).first();
+    if (existing) return json({ error: 'You already have a review on this recipe. Your newer review has been kept.' }, 409);
+    statements.push(env.DB.prepare('INSERT INTO recipe_reviews (recipe_id, user_id, rating, review_text, experience, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(data.recipeId, userId, data.rating, data.text, data.experience, data.createdAt, data.updatedAt));
+  } else {
+    const existing = await env.DB.prepare('SELECT id FROM recipe_lists WHERE user_id = ? AND lower(name) = lower(?)').bind(userId, data.name).first();
+    if (existing) return json({ error: 'You already have a list with that name. Rename it before restoring this one.' }, 409);
+    const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM recipe_lists WHERE user_id = ?').bind(userId).first();
+    if (Number(count?.count || 0) >= 50) return json({ error: 'Remove a list before restoring another; you have fifty lists.' }, 409);
+    statements.push(env.DB.prepare('INSERT INTO recipe_lists (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(data.id, userId, data.name, data.createdAt, data.updatedAt));
+    for (const item of data.items) statements.push(env.DB.prepare('INSERT INTO recipe_list_items (list_id, recipe_id, created_at) VALUES (?, ?, ?)')
+      .bind(data.id, item.recipeId, item.createdAt));
+  }
+  statements.push(env.DB.prepare('DELETE FROM deleted_items WHERE id = ? AND user_id = ?').bind(id, userId));
+  await env.DB.batch(statements);
+  return json({ id, restored: true });
 }
 
 async function friendStats(env, userId) {
@@ -1377,6 +1446,12 @@ export default {
       if (request.method === 'GET' && path === '/recipes') return json({ recipes: await listRecipes(env, auth.userId) });
       if (request.method === 'GET' && path === '/stats') return json({ stats: await friendStats(env, auth.userId) });
       if (request.method === 'GET' && path === '/activity') return json({ activity: await friendActivity(env, auth.userId) });
+      if (request.method === 'GET' && path === '/trash') return recentlyDeleted(env, auth.userId);
+      const personalRestoreMatch = path.match(/^\/trash\/([a-zA-Z0-9-]+)\/restore$/);
+      if (request.method === 'POST' && personalRestoreMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before restoring more items.');
+        return limited || await restorePersonalItem(personalRestoreMatch[1], env, auth.userId);
+      }
       if (request.method === 'POST' && path === '/recipes') {
         const limited = await rateLimit(request, env.CREATE_RATE_LIMITER, 'That is a lot of recipes at once. Give Recipeboy a minute to chew.');
         return limited || createRecipe(request, env, auth.userId);
@@ -1398,7 +1473,7 @@ export default {
       }
       if (request.method === 'DELETE' && listMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more lists.');
-        return limited || deleteRecipeList(listMatch[1], env, auth.userId);
+        return limited || await deleteRecipeList(listMatch[1], env, auth.userId);
       }
       const madeMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/made$/);
       if (request.method === 'POST' && madeMatch) {
@@ -1411,6 +1486,11 @@ export default {
         return limited || await markEaten(eatenMatch[1], env, auth.userId);
       }
       const photoCollectionMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos$/);
+      const photoRestoreMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos\/([a-zA-Z0-9-]+)\/restore$/);
+      if (request.method === 'POST' && photoRestoreMatch) {
+        const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before restoring more photos.');
+        return limited || await restoreRecipePhoto(photoRestoreMatch[1], photoRestoreMatch[2], env);
+      }
       if (request.method === 'POST' && photoCollectionMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before adding more photos.');
         return limited || addRecipePhoto(photoCollectionMatch[1], request, env, auth.userId);
@@ -1418,7 +1498,7 @@ export default {
       const photoMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/photos\/([a-zA-Z0-9-]+)$/);
       if (request.method === 'DELETE' && photoMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more photos.');
-        return limited || deleteRecipePhoto(photoMatch[1], photoMatch[2], env);
+        return limited || await deleteRecipePhoto(photoMatch[1], photoMatch[2], env);
       }
       const reviewMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/review$/);
       if (request.method === 'POST' && reviewMatch) {
@@ -1427,7 +1507,7 @@ export default {
       }
       if (request.method === 'DELETE' && reviewMatch) {
         const limited = await rateLimit(request, env.SOCIAL_RATE_LIMITER, 'Give Recipeboy a minute before changing more tasting notes.');
-        return limited || deleteReview(reviewMatch[1], env, auth.userId);
+        return limited || await deleteReview(reviewMatch[1], env, auth.userId);
       }
       const restoreMatch = path.match(/^\/recipes\/([a-zA-Z0-9-]+)\/restore$/);
       if (request.method === 'POST' && restoreMatch) {

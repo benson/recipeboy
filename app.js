@@ -1,6 +1,8 @@
 import { initAuth } from './auth.js?v=2';
 import { normalizeYield, yieldLabel, timeIsEstimated } from './recipe-metadata.js?v=1';
 import { formatDuration, parseDuration } from './duration.js?v=1';
+import { initPhotoViewer } from './photo-viewer.js?v=1';
+import { initRecovery } from './recovery.js?v=1';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
@@ -60,6 +62,13 @@ let pendingAuthUser;
 let loadedUserId = '';
 let addAfterSignIn = false;
 let submittingRecipe = false;
+const photoViewer = initPhotoViewer({
+  getRecipe: (id) => state.recipes.find((recipe) => recipe.id === id),
+  canDelete: () => state.isSignedIn,
+  photoUrl: recipePhotoUrl,
+  deletePhoto,
+});
+const recovery = initRecovery({ api, onRestore: async () => { await loadSharedBox(); refreshDialog(); } });
 
 // Keep one real Add button and dock it only after the hero has left the viewport.
 let headerFrame = 0;
@@ -509,7 +518,7 @@ function cardTemplate(recipe) {
   const addedBy = recipe.addedBy?.displayName;
   return `<article class="recipe-card" data-id="${esc(recipe.id)}">
     <div class="card-color"></div>
-    ${firstPhoto ? `<div class="card-photo"><img src="${esc(recipePhotoUrl(firstPhoto))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"></div>` : ''}
+    ${firstPhoto ? `<button type="button" class="card-photo" data-view-photo="${esc(firstPhoto.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Enlarge photo of ${esc(recipe.title)}" aria-haspopup="dialog"><img src="${esc(recipePhotoUrl(firstPhoto))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"></button>` : ''}
     <div class="card-body" data-open="${esc(recipe.id)}" tabindex="0" role="button" aria-label="Open ${esc(recipe.title)}">
       <h3>${esc(recipe.title)}</h3>
       <p class="card-description">${esc(recipe.description || 'A recipe worth keeping.')}</p>
@@ -763,7 +772,7 @@ function detailTemplate(recipe) {
     </div>
     <section class="recipe-photos" aria-label="Meal photos">
       <div class="recipe-photos-heading"><div><span class="social-eyebrow">At the table</span><h3>Meal photos</h3></div></div>
-      ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption>${state.isSignedIn ? `<button type="button" data-delete-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Remove this photo">×</button>` : ''}</figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
+      ${photos.length ? `<div class="photo-gallery">${photos.map((photo, index) => `<figure class="photo-frame photo-frame-${(index % 3) + 1}"><button type="button" class="photo-enlarge" data-view-photo="${esc(photo.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Enlarge photo ${index + 1} of ${esc(recipe.title)}" aria-haspopup="dialog"><img src="${esc(recipePhotoUrl(photo))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"></button><figcaption>${photo.addedBy ? `Photo by ${esc(photo.addedBy.displayName)}` : 'From a Recipeboy friend'}</figcaption></figure>`).join('')}</div>` : '<p class="photo-empty">No snapshots yet. Show your friends how it turned out!</p>'}
     </section>
     ${socialTemplate(recipe)}`;
 }
@@ -895,7 +904,7 @@ function profileTemplate(profile) {
       <fieldset><legend>Backdrop</legend><div class="avatar-options color-options">${backgrounds.map(([value, label, color]) => `<label class="avatar-option color-option" style="--swatch:${color}"><input type="radio" name="background" value="${value}" ${avatar.background === value ? 'checked' : ''}><span class="color-swatch" aria-hidden="true"></span><strong>${label}</strong></label>`).join('')}</div></fieldset>
       <fieldset><legend>Choose your Recipeboy</legend><div class="avatar-options character-options">${Object.entries(AVATAR_CHARACTERS).map(([value, option]) => `<label class="avatar-option character-option character-${value}"><input type="radio" name="character" value="${value}" ${avatar.character === value ? 'checked' : ''}><span class="option-art character-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
       <fieldset><legend>Favorite flavor</legend><div class="avatar-options flavor-options">${Object.entries(AVATAR_FLAVORS).map(([value, option]) => `<label class="avatar-option flavor-option"><input type="radio" name="flavor" value="${value}" ${avatar.flavor === value ? 'checked' : ''}><span class="option-art flavor-art"><img src="${esc(option.image)}" alt=""></span><strong>${esc(option.label)}</strong></label>`).join('')}</div></fieldset>
-      <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><span class="profile-account-links"><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button><button class="text-button profile-sign-out" type="button" data-profile-sign-out>Sign out</button></span></div>
+      <div class="profile-actions"><button class="primary-button" type="submit">Save my Recipeboy</button><span class="profile-account-links"><button class="text-button" type="button" data-open-recovery>Recently deleted</button><button id="clerk-account-button" class="text-button" type="button">Account & sign-in settings</button><button class="text-button profile-sign-out" type="button" data-profile-sign-out>Sign out</button></span></div>
     </form>`;
 }
 
@@ -1029,14 +1038,20 @@ async function markEaten(id) {
 
 async function deletePhoto(recipeId, photoId) {
   const recipe = state.recipes.find((item) => item.id === recipeId);
-  if (!recipe) return;
-  try {
-    await api(`/recipes/${encodeURIComponent(recipeId)}/photos/${encodeURIComponent(photoId)}`, { method: 'DELETE' });
-    recipe.photos = (recipe.photos || []).filter((photo) => photo.id !== photoId);
-    render();
-    refreshDialog();
-    showToast('Photo removed.');
-  } catch (error) { showToast(error.message); }
+  if (!recipe) throw new Error('Recipe not found.');
+  await api(`/recipes/${encodeURIComponent(recipeId)}/photos/${encodeURIComponent(photoId)}`, { method: 'DELETE' });
+  recipe.photos = (recipe.photos || []).filter((photo) => photo.id !== photoId);
+  render();
+  refreshDialog();
+  showToast('Photo moved to Recently deleted.', {
+    label: 'Undo',
+    run: async () => {
+      await api(`/recipes/${encodeURIComponent(recipeId)}/photos/${encodeURIComponent(photoId)}/restore`, { method: 'POST' });
+      await loadSharedBox();
+      refreshDialog();
+      showToast('Photo restored.');
+    },
+  });
 }
 
 async function deleteRecipe(id) {
@@ -1065,8 +1080,7 @@ async function deleteRecipe(id) {
 async function restoreRecipe(deletedRecipe) {
   try {
     const result = await api(`/recipes/${encodeURIComponent(deletedRecipe.id)}/restore`, { method: 'POST' });
-    state.recipes.push(result.recipe);
-    render();
+    await loadSharedBox();
     showToast(`Restored “${result.recipe.title}”.`);
   } catch (error) { showToast(error.message); }
 }
@@ -1217,8 +1231,8 @@ async function handleAction(event) {
   if (madeButton) return markMade(madeButton.dataset.made);
   const eatenButton = event.target.closest('[data-eaten]');
   if (eatenButton) return markEaten(eatenButton.dataset.eaten);
-  const deletePhotoButton = event.target.closest('[data-delete-photo]');
-  if (deletePhotoButton) return deletePhoto(deletePhotoButton.dataset.recipeId, deletePhotoButton.dataset.deletePhoto);
+  const photoButton = event.target.closest('[data-view-photo]');
+  if (photoButton) return photoViewer.open(photoButton.dataset.recipeId, photoButton.dataset.viewPhoto, photoButton);
   const deleteButton = event.target.closest('[data-delete]');
   if (deleteButton) return deleteRecipe(deleteButton.dataset.delete);
   const openTarget = event.target.closest('[data-open]');
@@ -1304,6 +1318,7 @@ el.profileDialog.addEventListener('click', (event) => { if (event.target === el.
 el.profileDialog.addEventListener('change', (event) => { if (event.target.matches('input[type="radio"]')) refreshProfilePreview(); });
 el.profileDialog.addEventListener('submit', (event) => { if (event.target.id === 'profile-form') void saveProfile(event); });
 el.profileDialog.addEventListener('click', (event) => {
+  if (event.target.closest('[data-open-recovery]')) void recovery.open();
   if (event.target.closest('#clerk-account-button')) authClient?.openAccount();
   if (event.target.closest('[data-profile-sign-out]')) {
     el.profileDialog.close();
@@ -1419,6 +1434,8 @@ async function loadSharedBox() {
 }
 
 async function showSignedOut() {
+  photoViewer.close();
+  recovery.close();
   loadedUserId = '';
   state.isSignedIn = false;
   state.recipes = [];

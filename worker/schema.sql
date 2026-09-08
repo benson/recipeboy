@@ -74,8 +74,19 @@ CREATE TABLE IF NOT EXISTS recipe_photos (
   recipe_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   object_key TEXT NOT NULL UNIQUE,
+  deleted_at TEXT,
   created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS recipe_photos_recipe_id ON recipe_photos(recipe_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS recipe_photos_user_id ON recipe_photos(user_id);
+
+CREATE TABLE IF NOT EXISTS deleted_items (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('list', 'review')),
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  data_json TEXT NOT NULL,
+  deleted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS deleted_items_user_id ON deleted_items(user_id, deleted_at DESC);
