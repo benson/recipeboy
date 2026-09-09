@@ -2,6 +2,16 @@
 
 A tiny shared recipe box for friends. Paste a recipe URL or unstructured recipe text; Recipeboy stores a normalized version with ingredients, steps, timing, yield, source, a copyable shopping list, a permalink, meal photos, ratings, and separate per-person “I cooked this” and “I ate this” records. Friends can review and upload meal photos as either a cook or a taster. Eating never increments the cook count or cooking leaderboard. Recipe cards distinguish who added a recipe from the friends who cooked it, and the stats page celebrates the top contributors, cooks, and reviewers.
 
+### Meals made from linked recipes
+
+Use **Link recipes to make a meal** when adding a recipe, or **More → Edit recipe → Made with other recipes** afterward. Search the box, choose up to 16 component recipes, and arrange their order with the arrow buttons. Put only the meal's extra ingredients and coordinated cooking instructions in the parent recipe; each component keeps its own ingredients, method, attribution, and shareable permalink. A parent can have no extra ingredients if all ingredients come from its components.
+
+The detail view shows **Made with** links and components show **Part of** backlinks. These are real links that support opening a separate tab, direct sharing, and browser Back. Opening a component carries the currently selected recipe size. **Copy list** collects the meal and its nested components in named groups, using one batch of each distinct recipe at the selected size. It does not merge ingredient units or count a component twice when multiple nested meals share it. Cooking or reviewing a meal never silently marks its components as cooked.
+
+Ordered `componentRecipeIds` live in each recipe's existing `data_json`; no database migration is needed. Creation and editing validate references and reject self-links and indirect cycles. Unlinking never deletes a component. Existing references survive soft deletion, show an unavailable state (also in the shopping list), and reconnect on restoration. Older clients that omit this field preserve saved links. Recipe names and metadata are resolved from the box so edits appear everywhere.
+
+Run `npm test` for API, graph, and recovery checks. With `npm run dev` serving port 4173, run the Playwright CLI's `run-code --filename scripts/check-recipe-links.js` in an open browser session for the editor, navigation, clipboard, and phone-layout checks. Its API fixtures do not write production data.
+
 ### Photo viewing and recovery
 
 Click a card or gallery photo to enlarge it. The viewer supports previous/next photos, arrow keys, Escape, and a close button. Photo deletion lives under the viewer's **Photo options** button and requires confirmation, with **Keep photo** focused by default.

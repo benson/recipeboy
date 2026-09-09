@@ -1,5 +1,6 @@
 import { normalizeYield } from '../recipe-metadata.js';
 import { parseDuration } from '../duration.js';
+import { componentIds, validateComponentIds } from '../recipe-components.js';
 
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
@@ -956,6 +957,14 @@ async function listRecipes(env, userId) {
   return recipes;
 }
 
+async function readComponentLinks(value, id, env, previous = []) {
+  if (value === undefined) return previous;
+  if (Array.isArray(value) && !value.length) return [];
+  const { results } = await env.DB.prepare('SELECT id, data_json, deleted_at FROM recipes').all();
+  const recipes = results.map((row) => ({ ...JSON.parse(row.data_json), id: row.id, deletedAt: row.deleted_at }));
+  return validateComponentIds(value, id, recipes, previous);
+}
+
 async function createRecipe(request, env, userId) {
   let body;
   try { body = await readJsonRequest(request); }
@@ -963,6 +972,10 @@ async function createRecipe(request, env, userId) {
   const input = String(body.input || '').trim();
   if (!input) return json({ error: 'Paste a recipe link or some recipe text first.' }, 400);
   if (input.length > MAX_INPUT) return json({ error: 'That recipe is too long. Keep it under 50,000 characters.' }, 413);
+  const id = crypto.randomUUID().slice(0, 12);
+  let linkedIds;
+  try { linkedIds = await readComponentLinks(body.componentRecipeIds, id, env); }
+  catch (error) { return json({ error: error.message }, 400); }
   let recipe;
   try {
     if (/^https?:\/\//i.test(input) && body.readerMarkdown) {
@@ -993,7 +1006,7 @@ async function createRecipe(request, env, userId) {
       ...(error.readerUrl ? { readerUrl: error.readerUrl } : {}),
     }, 422);
   }
-  const id = crypto.randomUUID().slice(0, 12);
+  recipe.componentRecipeIds = linkedIds;
   const createdAt = new Date().toISOString();
   await env.DB.prepare('INSERT INTO recipes (id, title, source_url, source_name, data_json, made_count, created_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
     .bind(id, recipe.title, recipe.sourceUrl || null, recipe.sourceName || null, JSON.stringify(recipe), createdAt, userId).run();
@@ -1109,13 +1122,16 @@ async function updateRecipe(id, request, env, userId) {
   catch (error) { return json({ error: error.message }, error.status || 400); }
   let original;
   try { original = JSON.parse(row.data_json); } catch { original = {}; }
+  let linkedIds;
+  try { linkedIds = await readComponentLinks(body.componentRecipeIds, id, env, componentIds(original)); }
+  catch (error) { return json({ error: error.message }, 400); }
   const title = cleanText(body.title, 160);
   if (!title) return json({ error: 'Every recipe needs a title.' }, 400);
   const ingredients = toArray(body.ingredients).slice(0, 200)
     .map((item) => cleanText(item, 500)).filter(Boolean).map(parseIngredient).filter((item) => item.item);
   const instructions = toArray(body.instructions).slice(0, 100)
     .map((item) => cleanText(item, 5000)).filter(Boolean);
-  if (!ingredients.length) return json({ error: 'Add at least one ingredient.' }, 400);
+  if (!ingredients.length && !linkedIds.length) return json({ error: 'Add at least one ingredient or linked recipe.' }, 400);
   if (!instructions.length) return json({ error: 'Add at least one instruction.' }, 400);
   const duration = (value) => Math.max(0, Math.min(10_080, parseDuration(value)));
   const invalidDuration = (value) => {
@@ -1133,6 +1149,7 @@ async function updateRecipe(id, request, env, userId) {
     .filter((tag) => !DERIVED_TIME_TAGS.has(tag)).slice(0, 16);
   const recipe = withDerivedTags({
     ...original,
+    componentRecipeIds: linkedIds,
     title,
     description: cleanText(body.description, 1000),
     yield: normalizeYield(cleanText(body.yield, 100)),

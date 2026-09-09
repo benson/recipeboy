@@ -368,6 +368,44 @@ html:has(#add-recipe-dialog[open]) { overflow: hidden; }
 .viewer-social-cta .primary-button { width: auto; }
 .recipe-columns { display: grid; grid-template-columns: .9fr 1.1fr; gap: 36px; padding: 27px 30px 38px; }
 .recipe-columns h3 { margin-bottom: 14px; font-size: 20px; }
+.recipe-connections { margin: 8px 30px 0; padding: 20px; background: #fff1b4; border: 3px solid var(--navy); border-radius: 16px; }
+.connections-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.connections-heading h3, .recipe-backlinks h3 { margin: 0; font-size: 20px; }
+.connections-heading > span { font-size: 12px; }
+.recipe-connections p, .component-ingredients-note { font-size: 13px; line-height: 1.5; margin: 8px 0 14px; }
+.linked-recipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.linked-recipe { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 15px; color: var(--navy); text-decoration: none; background: var(--white); border: 2px solid var(--navy); border-radius: 11px; min-width: 0; }
+.linked-recipe strong { display: block; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.linked-recipe small { display: block; margin-top: 5px; font-size: 12px; color: #526079; }
+.linked-recipe:hover, .linked-recipe:focus-visible { background: #e9f0ff; outline: 2px solid var(--blue); outline-offset: 2px; }
+.linked-recipe.unavailable { opacity: .7; border-style: dashed; }
+.recipe-backlinks { margin-top: 18px; }
+.recipe-backlinks:first-child { margin-top: 0; }
+.recipe-backlinks h3 { margin-bottom: 12px; }
+.component-picker { min-width: 0; margin: 20px 0; padding: 16px; border: 2px solid var(--navy); border-radius: 12px; background: #fff8dc; }
+.component-picker legend { padding: 0 6px; font-size: 15px; font-weight: 900; }
+.component-picker p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
+.component-selection { list-style: none; padding: 0; margin: 0 0 15px; }
+.component-selection li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #c9c3a8; }
+.component-selection li > span { overflow-wrap: anywhere; font-size: 14px; }
+.component-order { display: flex; gap: 4px; flex-shrink: 0; }
+.component-order button { width: 34px; height: 36px; border: 2px solid var(--navy); border-radius: 8px; background: var(--white); cursor: pointer; }
+.component-picker button:disabled { opacity: .35; cursor: default; }
+.component-picker .component-search-label { display: block; font-size: 12px; font-weight: 900; }
+.component-picker input[type="search"] { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; border: 2px solid var(--navy); border-radius: 9px; background: var(--white); color: var(--navy); }
+.component-picker input[type="hidden"] { display: none; }
+.component-results { display: grid; gap: 5px; margin-top: 8px; }
+.component-results button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; font-size: 13px; background: var(--white); border: 1px solid #c9c3a8; border-radius: 8px; cursor: pointer; }
+.component-results button:hover:enabled { background: #e9f0ff; }
+.component-results button > span:first-child { overflow-wrap: anywhere; }
+.component-picker-status { display: block; margin-top: 8px; font-size: 12px; }
+.add-component-details { margin-top: 16px; }
+.add-component-details summary { font-size: 14px; cursor: pointer; }
+.add-component-details .component-picker { margin-bottom: 0; }
+@media (max-width: 600px) {
+  .recipe-connections { margin-left: 20px; margin-right: 20px; padding: 14px; }
+  .component-picker { padding: 12px; }
+}
 .ingredient-list { margin: 0; padding: 0; list-style: none; }
 .ingredient-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 2px dotted #c2bfae; line-height: 1.35; }
 .ingredient-name { min-width: 0; color: var(--ink); font-weight: 900; overflow-wrap: anywhere; }

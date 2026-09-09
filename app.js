@@ -3,6 +3,8 @@ import { normalizeYield, yieldLabel, timeIsEstimated } from './recipe-metadata.j
 import { formatDuration, parseDuration } from './duration.js?v=1';
 import { initPhotoViewer } from './photo-viewer.js?v=1';
 import { initRecovery } from './recovery.js?v=1';
+import { componentIds, shoppingGroups } from './recipe-components.js?v=1';
+import { componentPickerTemplate, initComponentPicker, selectedComponentIds } from './component-picker.js?v=1';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
@@ -99,6 +101,10 @@ async function openAddRecipe() {
     catch (error) { addAfterSignIn = false; showToast(error.message); }
     return;
   }
+  const pickerSlot = document.getElementById('add-components');
+  const draftIds = selectedComponentIds(pickerSlot);
+  pickerSlot.innerHTML = componentPickerTemplate({ componentRecipeIds: draftIds });
+  initComponentPicker(pickerSlot.querySelector('[data-component-picker]'), () => state.recipes);
   if (!el.addDialog.open) el.addDialog.showModal();
   el.input.focus({ preventScroll: true });
 }
@@ -107,6 +113,8 @@ function setRecipeSubmitting(value) {
   submittingRecipe = value;
   el.form.setAttribute('aria-busy', String(value));
   el.input.readOnly = value;
+  const picker = el.form.querySelector('[data-component-picker]');
+  if (picker) picker.disabled = value;
   const button = el.form.querySelector('button[type="submit"]');
   button.disabled = value;
   if (!value) button.querySelector('span').textContent = state.isSignedIn ? 'Feed him!' : 'Sign in to add';
@@ -253,7 +261,7 @@ async function normalizeInput(input, button, extra = {}) {
     if (!readerMarkdown) throw new Error('The backup reader could not find the recipe. Try pasting its text instead.');
     return api('/recipes', {
       method: 'POST',
-      body: JSON.stringify({ input, readerMarkdown, readerTitle: payload?.data?.title || '' }),
+      body: JSON.stringify({ input, ...extra, readerMarkdown, readerTitle: payload?.data?.title || '' }),
     });
   }
 }
@@ -407,7 +415,12 @@ async function uploadRecipePhotos(recipe, files) {
 async function copyShoppingList(recipe) {
   const scale = state.activeId === recipe.id ? state.activeScale : 1;
   const scaleNote = scale === 1 ? '' : ` (${friendlyNumber(scale)}×)`;
-  const text = `${recipe.title}${scaleNote}\n${shoppingList(recipe, scale)}`;
+  const groups = shoppingGroups(recipe, state.recipes);
+  const text = componentIds(recipe).length
+    ? `${recipe.title}${scaleNote}\nOne batch of each recipe${scaleNote}; shared components listed once.\n\n${groups.map((group) => group.missing
+      ? '⚠ A linked recipe is unavailable. Its ingredients are not included.'
+      : `${group.title}\n${shoppingList(group, scale) || 'See linked recipes below.'}`).join('\n\n')}`
+    : `${recipe.title}${scaleNote}\n${shoppingList(recipe, scale)}`;
   await navigator.clipboard.writeText(text);
   showToast('Shopping list copied!');
 }
@@ -525,7 +538,7 @@ function cardTemplate(recipe) {
       <div class="card-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
         ${yieldLabel(recipe) ? `<span class="meta-item" ${recipe.metadataEstimates?.includes('yield') ? 'title="Estimated servings"' : ''}>♨ ${esc(yieldLabel(recipe))}</span>` : ''}
-        <span class="meta-item">${recipe.ingredients.length} ingredients</span>
+        <span class="meta-item">${componentIds(recipe).length ? `${componentIds(recipe).length} linked recipes` : `${recipe.ingredients.length} ingredients`}</span>
       </div>
       <div class="card-rating ${recipe.ratingCount ? '' : 'unrated'}" aria-label="${esc(ratingSummary(recipe))}"><span aria-hidden="true">★</span><strong>${recipe.ratingCount ? Number(recipe.ratingAverage).toFixed(1) : 'New'}</strong><small>${recipe.ratingCount ? `${recipe.ratingCount} rating${recipe.ratingCount === 1 ? '' : 's'}` : 'Not rated yet'}</small></div>
       ${(recipe.tags || []).length ? `<div class="card-tags" aria-label="Recipe tags">${recipe.tags.map((tag) => `<span class="pill recipe-tag">${esc(tag)}</span>`).join('')}</div>` : ''}
@@ -718,6 +731,22 @@ function socialTemplate(recipe) {
   </section>`;
 }
 
+function recipeLinksTemplate(recipe) {
+  const ids = componentIds(recipe);
+  const parents = state.recipes.filter((candidate) => componentIds(candidate).includes(recipe.id));
+  if (!ids.length && !parents.length) return '';
+  const link = (target, component = false) => `<a class="linked-recipe" href="${esc(recipePermalink(target.id))}" data-linked-recipe="${esc(target.id)}">
+    <span><strong>${esc(target.title)}</strong><small>${esc([component ? `${friendlyNumber(state.activeScale)}× batch` : '', yieldLabel(target), minutesLabel(target)].filter(Boolean).join(' · '))}</small></span><span aria-hidden="true">↗</span>
+  </a>`;
+  return `<div class="recipe-connections">
+    ${ids.length ? `<section aria-label="Made with"><div class="connections-heading"><h3>Made with</h3><span>${ids.length} linked recipes</span></div><p>Open each recipe for its ingredients and method. Copy list includes every component at the selected recipe size, with shared components listed once.</p><div class="linked-recipe-grid">${ids.map((id) => {
+      const target = state.recipes.find((item) => item.id === id);
+      return target ? link(target, true) : '<div class="linked-recipe unavailable"><span><strong>Recipe unavailable</strong><small>This link will return if the recipe is restored.</small></span></div>';
+    }).join('')}</div></section>` : ''}
+    ${parents.length ? `<section class="recipe-backlinks" aria-label="Part of"><h3>Part of</h3><div class="linked-recipe-grid">${parents.map((parent) => link(parent)).join('')}</div></section>` : ''}
+  </div>`;
+}
+
 function detailTemplate(recipe) {
   const sourceUrl = safeUrl(recipe.sourceUrl);
   const source = sourceUrl ? (recipe.sourceName || 'Original recipe') : '';
@@ -766,8 +795,9 @@ function detailTemplate(recipe) {
         </div>
       </div>
     </div>
+    ${recipeLinksTemplate(recipe)}
     <div class="recipe-columns">
-      <section><h3>What you need</h3><ul class="ingredient-list">${ingredients || '<li>Ingredients weren’t listed.</li>'}</ul></section>
+      <section><h3>${componentIds(recipe).length ? 'For the meal' : 'What you need'}</h3>${componentIds(recipe).length ? '<p class="component-ingredients-note">Alongside the ingredients in the linked recipes above.</p>' : ''}<ul class="ingredient-list">${ingredients || (componentIds(recipe).length ? '<li>Everything you need is in the linked recipes.</li>' : '<li>Ingredients weren’t listed.</li>')}</ul></section>
       <section><h3>What to do</h3><ol class="steps">${steps || '<li>Instructions weren’t listed.</li>'}</ol></section>
     </div>
     <section class="recipe-photos" aria-label="Meal photos">
@@ -777,14 +807,18 @@ function detailTemplate(recipe) {
     ${socialTemplate(recipe)}`;
 }
 
-function openRecipe(id, updateHash = true) {
+function openRecipe(id, updateHash = true, scale = 1) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   state.activeId = id;
-  state.activeScale = 1;
+  state.activeScale = scale;
   state.confirmDeleteId = null;
   el.dialogContent.innerHTML = detailTemplate(recipe);
-  el.dialog.showModal();
+  if (!el.dialog.open) el.dialog.showModal();
+  el.dialog.querySelector('.dialog-shell').scrollTop = 0;
+  const heading = el.dialogContent.querySelector('h2');
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
   if (updateHash && location.hash !== `#recipe=${encodeURIComponent(id)}`) {
     history.pushState(null, '', `#recipe=${encodeURIComponent(id)}`);
   }
@@ -828,8 +862,9 @@ function editRecipeTemplate(recipe) {
         <div class="edit-time-total"><span>Total time</span><output data-edit-total-time aria-live="polite">${esc(calculatedTotal || '—')}</output></div>
       </div>
       <label class="edit-wide">Tags <span>comma separated</span><input name="tags" maxlength="500" value="${esc((recipe.tags || []).join(', '))}" placeholder="weeknight, spicy, vegetarian"></label>
+      ${componentPickerTemplate(recipe)}
       <div class="edit-columns">
-        <label>Ingredients <span>one per line</span><textarea name="ingredients" rows="12" required>${esc(ingredients)}</textarea></label>
+        <label>Ingredients <span>one per line; a meal can use its linked recipes</span><textarea name="ingredients" rows="12">${esc(ingredients)}</textarea></label>
         <label>Instructions <span>one step per line</span><textarea name="instructions" rows="12" required>${esc(instructions)}</textarea></label>
       </div>
       <div class="edit-actions"><button class="primary-button" type="submit">Save recipe</button><button class="action-button" type="button" data-cancel-edit>Cancel</button></div>
@@ -840,6 +875,7 @@ function openRecipeEditor(id) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   el.editContent.innerHTML = editRecipeTemplate(recipe);
+  initComponentPicker(el.editContent.querySelector('[data-component-picker]'), () => state.recipes);
   el.editDialog.showModal();
 }
 
@@ -878,6 +914,7 @@ async function saveRecipeEdit(event) {
         tags: String(data.get('tags') || '').split(',').map((tag) => tag.trim()).filter(Boolean),
         ingredients: lines('ingredients'),
         instructions: lines('instructions'),
+        componentRecipeIds: data.getAll('componentRecipeIds'),
       }),
     });
     Object.assign(recipe, result.recipe);
@@ -1099,9 +1136,10 @@ async function submitRecipe(event) {
   button.querySelector('span').textContent = /^https?:\/\//i.test(input) ? 'Reading that page…' : 'Tidying your notes…';
   el.status.hidden = true;
   try {
-    const result = await normalizeInput(input, button);
+    const result = await normalizeInput(input, button, { componentRecipeIds: selectedComponentIds(el.form) });
     state.recipes.unshift(result.recipe);
     el.input.value = '';
+    document.getElementById('add-components').innerHTML = '';
     el.status.hidden = true;
     render();
     el.addDialog.close();
@@ -1192,6 +1230,13 @@ async function openFeed() {
 }
 
 async function handleAction(event) {
+  const linkedRecipe = event.target.closest('[data-linked-recipe]');
+  if (linkedRecipe) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    openRecipe(linkedRecipe.dataset.linkedRecipe, true, state.activeScale);
+    return;
+  }
   if (event.target.closest('[data-sign-in]')) {
     await authClient?.signIn();
     return;

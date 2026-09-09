@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" href="assets/feed-recipeboy-button-2x.png" as="image">
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
 </head>
 <body>
   <div class="top-stripe" aria-hidden="true"></div>
@@ -136,6 +136,7 @@
       <form id="recipe-form">
         <label class="sr-only" for="recipe-input">Recipe URL or recipe text</label>
         <textarea id="recipe-input" rows="9" required autofocus placeholder="Paste a link to a recipe (from Reddit, SeriousEats, PalasangPinoy...) or write the recipe itself in here!"></textarea>
+        <details class="add-component-details"><summary>Link recipes to make a meal</summary><div id="add-components"></div></details>
         <div class="form-footer">
           <button class="primary-button" type="submit"><span>Feed him!</span><span aria-hidden="true">→</span></button>
         </div>
@@ -246,6 +247,6 @@
     <img src="assets/recipeboy-mascot.svg" alt="">
   </button>
   <footer aria-hidden="true"></footer>
-  <script type="module" src="app.js?v=41"></script>
+  <script type="module" src="app.js?v=42"></script>
 </body>
 </html>
