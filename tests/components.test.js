@@ -97,3 +97,12 @@ test('link mutations keep existing authentication and rate-limit gates', async (
   assert.equal((await request('/recipes/meal', 'PUT', edit(['onions']))).status, 429);
   assert.deepEqual(stored('meal').componentRecipeIds, ['pico']);
 });
+
+test('editing links preserves a recipe total that includes resting time', async (t) => {
+  const { sqlite, request, edit, stored } = setup(t);
+  sqlite.prepare('UPDATE recipes SET data_json = ? WHERE id = ?')
+    .run(JSON.stringify({ ...stored('meal'), prepMinutes: 15, cookMinutes: 0, totalMinutes: 45 }), 'meal');
+  const response = await request('/recipes/meal', 'PUT', { ...edit(['pico', 'onions']), prepMinutes: '15 min', cookMinutes: '' });
+  assert.equal(response.status, 200);
+  assert.equal(stored('meal').totalMinutes, 45);
+});

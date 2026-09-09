@@ -1143,7 +1143,9 @@ async function updateRecipe(id, request, env, userId) {
   }
   const prepMinutes = duration(body.prepMinutes);
   const cookMinutes = duration(body.cookMinutes);
-  const totalMinutes = Math.min(10_080, prepMinutes + cookMinutes);
+  // Editing links or text must not discard a source's resting/chilling time.
+  const timesUnchanged = prepMinutes === (original.prepMinutes || 0) && cookMinutes === (original.cookMinutes || 0);
+  const totalMinutes = Math.min(10_080, Math.max(prepMinutes + cookMinutes, timesUnchanged ? (original.totalMinutes || 0) : 0));
   const tags = toArray(body.tags).flatMap((tag) => String(tag).split(','))
     .map((tag) => cleanText(tag, 40).toLowerCase()).filter(Boolean)
     .filter((tag) => !DERIVED_TIME_TAGS.has(tag)).slice(0, 16);

@@ -850,7 +850,7 @@ function editRecipeTemplate(recipe) {
   const instructions = recipe.instructions.join('\n');
   const prepTime = formatDuration(recipe.prepMinutes);
   const cookTime = formatDuration(recipe.cookMinutes);
-  const calculatedTotal = formatDuration((recipe.prepMinutes || 0) + (recipe.cookMinutes || 0));
+  const calculatedTotal = formatDuration(Math.max(recipe.totalMinutes || 0, (recipe.prepMinutes || 0) + (recipe.cookMinutes || 0)));
   return `<div class="edit-hero"><span class="social-eyebrow">Tidy the keeper</span><h2>Edit recipe</h2><p>These changes update the shared recipe for everyone.</p></div>
     <form id="recipe-edit-form" class="recipe-edit-form" data-edit-id="${esc(recipe.id)}">
       <label class="edit-wide">Recipe name<input name="title" maxlength="160" required value="${esc(recipe.title)}"></label>
@@ -888,6 +888,10 @@ function updateEditTimeTotal(form) {
     const validZero = /^0(?:\s|$)/.test(value);
     input.setCustomValidity(value && !minutes && !validZero ? 'Try a time like “20 min” or “3 hours 15 minutes”.' : '');
     total += minutes;
+  }
+  const recipe = state.recipes.find((item) => item.id === form.dataset.editId);
+  if (recipe && parseDuration(inputs[0].value) === (recipe.prepMinutes || 0) && parseDuration(inputs[1].value) === (recipe.cookMinutes || 0)) {
+    total = Math.max(total, recipe.totalMinutes || 0);
   }
   form.querySelector('[data-edit-total-time]').textContent = formatDuration(total) || '—';
 }

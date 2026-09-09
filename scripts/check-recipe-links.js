@@ -7,7 +7,7 @@ async (page) => {
   const recipes = [
     { ...base, id: 'meal', title: 'Taco night', ingredients: [{ amount: '8', item: 'flour tortillas' }], componentRecipeIds: ['beef', 'pico', 'onions'] },
     { ...base, id: 'beef', title: 'Braised beef', ingredients: [{ amount: '2', unit: 'lb', item: 'beef' }] },
-    { ...base, id: 'pico', title: 'Fresh pico', ingredients: [{ amount: '6', item: 'tomatoes' }] },
+    { ...base, id: 'pico', title: 'Fresh pico', prepMinutes: 15, cookMinutes: 0, totalMinutes: 30, ingredients: [{ amount: '6', item: 'tomatoes' }] },
     { ...base, id: 'onions', title: 'Pickled onions', ingredients: [{ amount: '1', item: 'red onion' }] },
     { ...base, id: 'rice', title: 'Cilantro rice', ingredients: [{ amount: '1', unit: 'cup', item: 'rice' }] },
   ];
@@ -65,6 +65,7 @@ async (page) => {
   await dialog.getByRole('button', { name: 'More recipe actions' }).click();
   await dialog.getByRole('menuitem', { name: 'Edit recipe' }).click();
   await editor.getByRole('searchbox', { name: 'Find a recipe to link' }).fill('Taco');
+  assert(await editor.locator('[data-edit-total-time]').textContent() === '30 min', 'Editor total must preserve resting time');
   assert(await editor.locator('[data-component-add="meal"]').count() === 0, 'Picker must exclude circular links');
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await dialog.getByRole('button', { name: 'Close recipe', exact: true }).click();
