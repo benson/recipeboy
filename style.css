@@ -304,6 +304,7 @@ textarea::placeholder { color: #74809a; opacity: 1; }
 dialog { width: min(820px, calc(100% - 28px)); max-height: calc(100vh - 34px); padding: 0; color: var(--ink); background: transparent; border: 0; overflow: visible; }
 dialog::backdrop { background: rgba(16, 42, 90, .72); backdrop-filter: blur(4px); }
 .dialog-shell { position: relative; max-height: calc(100vh - 34px); overflow: auto; background: var(--white); border: 6px solid var(--navy); border-radius: 24px; box-shadow: 10px 10px 0 var(--yellow); }
+#recipe-dialog .dialog-shell { box-shadow: 10px 10px 0 var(--yellow), 10px 10px 0 2px var(--navy); }
 .add-recipe-dialog { width: min(650px, calc(100% - 28px)); }
 .add-recipe-shell { box-shadow: 9px 9px 0 var(--blue); }
 .add-recipe-heading { padding: 26px 80px 26px 24px; background: var(--yellow); border-bottom: 5px solid var(--navy); }
