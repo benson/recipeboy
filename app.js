@@ -365,7 +365,7 @@ function shoppingList(recipe, scale = 1) {
 }
 
 function recipePermalink(id) {
-  return `${location.origin}${location.pathname}#recipe=${encodeURIComponent(id)}`;
+  return `${API}/share/${encodeURIComponent(id)}`;
 }
 
 function recipeIdFromHash() {

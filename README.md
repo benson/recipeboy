@@ -58,6 +58,12 @@ Use a descriptive user agent such as `web:recipeboy:v1.0.0 (by /u/your_username)
 
 The optional “Save to Recipeboy” bookmarklet avoids API cost entirely. It captures selected or visible recipe text in the current browser tab, opens Recipeboy, and submits the text with the original source URL. The captured text travels in the new tab's URL fragment, which is not sent to GitHub Pages.
 
+## Recipe share previews
+
+**More → Copy recipe link** and linked-recipe anchors use the existing Worker's `/share/:id` URL. It returns public HTML with the recipe's title, description, canonical URL, and Open Graph/Twitter metadata before JavaScript runs. The latest active meal photo takes precedence over the imported source image; recipes without either have a text preview. Recipes without a description use their servings, time (including estimate markers), and ingredients. Each request reads the current recipe, so additions and edits need no frontend rebuild. Missing or deleted recipes return 404 without their old content.
+
+Browsers open the existing `#recipe=:id` detail view automatically, with a normal link as the no-JavaScript fallback. Existing hash links still open, but their fragments never reach preview crawlers; copy a fresh link from the recipe's menu to get a recipe preview. The homepage stays on GitHub Pages. Deploy the Worker before publishing frontend changes to sharing. Run `npm test` for raw crawler-response coverage and the Playwright CLI's `run-code --filename scripts/check-recipe-sharing.js` for the copy/open flow.
+
 ## Local development
 
 ```sh
