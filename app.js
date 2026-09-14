@@ -134,7 +134,7 @@ const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
 
-const SKELETON_CARD = '<article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-body"><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-attribution"><i></i><i></i></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>';
+const SKELETON_CARD = '<article class="recipe-card recipe-card-skeleton" aria-hidden="true"><div class="card-color"></div><div class="card-body"><i class="skeleton-line skeleton-title"></i><i class="skeleton-line skeleton-copy"></i><i class="skeleton-line skeleton-copy short"></i><div class="skeleton-pills"><i></i><i></i><i></i></div></div><div class="skeleton-attribution"><i></i><i></i></div><div class="skeleton-actions"><i></i><i></i><i></i></div></article>';
 
 function prepareAppLoading() {
   el.appMain.classList.add('app-loading');
@@ -526,9 +526,10 @@ function cardTemplate(recipe) {
   const firstPhoto = (recipe.photos || [])[0];
   const addedBy = recipe.addedBy?.displayName;
   return `<article class="recipe-card" data-id="${esc(recipe.id)}" data-recipe-tone="${recipeTone(recipe.id)}">
-    <div class="card-heading" data-open="${esc(recipe.id)}" tabindex="0" role="button" aria-label="Open ${esc(recipe.title)}"><h3>${esc(recipe.title)}</h3></div>
+    <div class="card-color" aria-hidden="true"></div>
     ${firstPhoto ? `<button type="button" class="card-photo" data-view-photo="${esc(firstPhoto.id)}" data-recipe-id="${esc(recipe.id)}" aria-label="Enlarge photo of ${esc(recipe.title)}" aria-haspopup="dialog"><img src="${esc(recipePhotoUrl(firstPhoto))}" alt="A friend's photo of ${esc(recipe.title)}" loading="lazy"></button>` : ''}
-    <div class="card-body" data-open="${esc(recipe.id)}">
+    <div class="card-body" data-open="${esc(recipe.id)}" tabindex="0" role="button" aria-label="Open ${esc(recipe.title)}">
+      <h3>${esc(recipe.title)}</h3>
       <p class="card-description">${esc(recipe.description || 'A recipe worth keeping.')}</p>
       <div class="card-meta">
         ${time ? `<span class="meta-item">◷ ${esc(time)}</span>` : ''}
