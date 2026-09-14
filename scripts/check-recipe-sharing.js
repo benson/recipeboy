@@ -7,13 +7,14 @@ async (page) => {
   const recipe = recipes.find((item) => item.photos?.length) || recipes[0];
   assert(recipe, 'The box must have a recipe to check');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto(`${site}/#recipe=${recipe.id}`);
+  await page.goto(`${site}/recipe/${recipe.id}`);
   const dialog = page.locator('#recipe-dialog');
   await dialog.getByRole('heading', { name: recipe.title, exact: true }).waitFor();
   await dialog.getByRole('button', { name: 'More recipe actions' }).click();
   await dialog.getByRole('menuitem', { name: 'Copy recipe link' }).click();
   const shared = await page.evaluate(() => navigator.clipboard.readText());
-  assert(shared === `${api}/share/${recipe.id}`, 'Copy recipe link must use the crawler-readable URL');
+  assert(shared === `${site}/recipe/${recipe.id}`, 'Copy recipe link must match the recipe URL on Recipeboy');
+  assert(page.url() === shared, 'The browser address and copied link must be identical');
   const crawler = await page.request.get(shared, { headers: { 'User-Agent': 'facebookexternalhit/1.1' } });
   assert(crawler.status() === 200, 'The crawler must get a successful HTML page');
   const html = await crawler.text();
@@ -32,12 +33,27 @@ async (page) => {
       const response = await page.request.get(image);
       assert(response.ok() && response.headers()['content-type']?.startsWith('image/'), 'The preview photo must be publicly readable');
     }
-    assert(await preview.getByRole('link', { name: 'Open recipe in Recipeboy' }).getAttribute('href') === `${site}/#recipe=${recipe.id}`, 'No-JavaScript fallback must open the recipe');
+    assert(await preview.locator('#recipe-dialog').count() === 1, 'The recipe URL must serve the full app');
+    assert(await preview.locator('base').getAttribute('href') === '/', 'App assets must load from the site root');
   } finally {
     await previewContext.close();
   }
-  await page.goto(shared);
-  await page.waitForURL(`${site}/#recipe=${recipe.id}`);
+  await page.reload();
+  await dialog.getByRole('heading', { name: recipe.title, exact: true }).waitFor();
+  assert(page.url() === shared, 'Refreshing must keep the canonical URL and reopen the recipe');
+  await dialog.getByRole('button', { name: 'Close recipe', exact: true }).click();
+  assert(page.url() === `${site}/`, 'Closing a recipe must return to the box URL');
+  await page.getByRole('button', { name: `Open ${recipe.title}`, exact: true }).click();
+  assert(page.url() === shared, 'Opening a card must put its shareable path in the address bar');
+  await page.goBack();
+  await dialog.waitFor({ state: 'hidden' });
+  await page.goForward();
+  await dialog.getByRole('heading', { name: recipe.title, exact: true }).waitFor();
+  await page.goto(`${site}/#recipe=${recipe.id}`);
+  await page.waitForURL(shared);
+  await dialog.getByRole('heading', { name: recipe.title, exact: true }).waitFor();
+  await page.goto(`${api}/share/${recipe.id}`);
+  await page.waitForURL(shared);
   await dialog.getByRole('heading', { name: recipe.title, exact: true }).waitFor();
   return { recipe: recipe.title, shareUrl: shared, preview: 'recipe metadata and public photo verified', opened: page.url() };
 }

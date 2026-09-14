@@ -5,6 +5,7 @@ import { initPhotoViewer } from './photo-viewer.js?v=1';
 import { initRecovery } from './recovery.js?v=1';
 import { componentIds, shoppingGroups } from './recipe-components.js?v=1';
 import { componentPickerTemplate, initComponentPicker, selectedComponentIds } from './component-picker.js?v=1';
+import { recipePath, recipeIdFromUrl } from './recipe-navigation.js?v=1';
 
 const API = ['localhost', '127.0.0.1'].includes(location.hostname)
   ? 'http://127.0.0.1:8791'
@@ -365,13 +366,7 @@ function shoppingList(recipe, scale = 1) {
 }
 
 function recipePermalink(id) {
-  return `${API}/share/${encodeURIComponent(id)}`;
-}
-
-function recipeIdFromHash() {
-  if (!location.hash.startsWith('#recipe=')) return '';
-  const id = location.hash.slice('#recipe='.length);
-  return /^[a-zA-Z0-9-]+$/.test(id) ? id : '';
+  return `${location.origin}${recipePath(id)}`;
 }
 
 function recipePhotoUrl(photo) {
@@ -807,7 +802,7 @@ function detailTemplate(recipe) {
     ${socialTemplate(recipe)}`;
 }
 
-function openRecipe(id, updateHash = true, scale = 1) {
+function openRecipe(id, updateUrl = true, scale = 1) {
   const recipe = state.recipes.find((item) => item.id === id);
   if (!recipe) return;
   state.activeId = id;
@@ -819,8 +814,12 @@ function openRecipe(id, updateHash = true, scale = 1) {
   const heading = el.dialogContent.querySelector('h2');
   heading.tabIndex = -1;
   heading.focus({ preventScroll: true });
-  if (updateHash && location.hash !== `#recipe=${encodeURIComponent(id)}`) {
-    history.pushState(null, '', `#recipe=${encodeURIComponent(id)}`);
+  document.title = `${recipe.title} · Recipeboy`;
+  const path = recipePath(id);
+  if (location.hash.startsWith('#recipe=')) {
+    history.replaceState(null, '', `${path}${location.search}`);
+  } else if (updateUrl && location.pathname !== path) {
+    history.pushState(null, '', `${path}${location.search}`);
   }
 }
 
@@ -1305,7 +1304,8 @@ el.dialog.addEventListener('close', () => {
   state.activeId = null;
   state.activeScale = 1;
   state.confirmDeleteId = null;
-  if (location.hash.startsWith('#recipe=')) history.replaceState(null, '', `${location.pathname}${location.search}`);
+  document.title = "Recipeboy — the friends' recipe box";
+  if (recipeIdFromUrl(location.href)) history.replaceState(null, '', `/${location.search}`);
 });
 el.search.addEventListener('input', () => { state.query = el.search.value; render(); });
 el.sort.addEventListener('change', () => { state.sort = el.sort.value; syncCustomSelect(el.sort); render(); });
@@ -1468,7 +1468,7 @@ async function loadSharedBox() {
     render();
     finishAppLoading();
     window.setTimeout(() => el.grid.classList.remove('recipe-grid-hydrating'), 360);
-    const linkedRecipeId = recipeIdFromHash();
+    const linkedRecipeId = recipeIdFromUrl(location.href);
     if (linkedRecipeId) openRecipe(linkedRecipeId, false);
     if (state.isSignedIn) await saveClippedRecipe();
   } catch (error) {
@@ -1557,14 +1557,16 @@ el.signIn.addEventListener('click', () => authClient?.signIn());
 el.publicSignIn.addEventListener('click', () => authClient?.signIn());
 el.account.addEventListener('click', openProfile);
 el.floatingRecipeboy.addEventListener('click', openProfile);
-window.addEventListener('hashchange', () => {
-  const linkedRecipeId = recipeIdFromHash();
+function syncRecipeLocation() {
+  const linkedRecipeId = recipeIdFromUrl(location.href);
   if (linkedRecipeId) {
     openRecipe(linkedRecipeId, false);
   } else if (el.dialog.open) {
     el.dialog.close();
   }
-});
+}
+window.addEventListener('popstate', syncRecipeLocation);
+window.addEventListener('hashchange', syncRecipeLocation);
 
 try {
   syncCustomSelect(el.sort);

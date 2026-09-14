@@ -21,23 +21,20 @@ export function shareDescription(recipe) {
   ].filter(Boolean).join(' · '), 200);
 }
 
-export function recipeShareResponse({ request, id, recipe, imageUrl = '' }) {
+export function recipeSite(request) {
   const url = new URL(request.url);
-  const site = ['localhost', '127.0.0.1'].includes(url.hostname) ? 'http://127.0.0.1:4173' : 'https://recipeboy.bensonperry.com';
-  const appUrl = recipe ? `${site}/#recipe=${encodeURIComponent(id)}` : `${site}/`;
-  const canonical = `${url.origin}/share/${encodeURIComponent(id)}`;
+  return ['localhost', '127.0.0.1'].includes(url.hostname) ? 'http://127.0.0.1:4173' : 'https://recipeboy.bensonperry.com';
+}
+
+export function recipeShareResponse({ request, id, recipe, imageUrl = '', appHtml = '' }) {
+  const site = recipeSite(request);
+  const canonical = `${site}/recipe/${encodeURIComponent(id)}`;
   const title = recipe ? text(recipe.title, 160) : 'Recipe unavailable';
   const description = recipe ? shareDescription(recipe) : 'This recipe is no longer in the recipe box, or this link is incorrect.';
-  const nonce = crypto.randomUUID();
   const meta = (attribute, key, value) => `<meta ${attribute}="${key}" content="${escapeHtml(value)}">`;
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  const metadata = `
   <title>${escapeHtml(title)} · Recipeboy</title>
   ${meta('name', 'description', description)}
-  <meta name="robots" content="noindex">
   <link rel="canonical" href="${escapeHtml(canonical)}">
   ${meta('property', 'og:type', 'article')}
   ${meta('property', 'og:site_name', 'Recipeboy')}
@@ -48,19 +45,37 @@ export function recipeShareResponse({ request, id, recipe, imageUrl = '' }) {
   ${meta('name', 'twitter:title', title)}
   ${meta('name', 'twitter:description', description)}
   ${imageUrl ? [meta('property', 'og:image', imageUrl), meta('property', 'og:image:alt', title), meta('name', 'twitter:image', imageUrl), meta('name', 'twitter:image:alt', title)].join('\n  ') : ''}
-  <style>body{font:18px/1.5 system-ui,sans-serif;max-width:40rem;margin:10vh auto;padding:0 1.5rem;color:#25221d;background:#fffdf5}img{max-width:100%;max-height:24rem;border-radius:1rem}a{color:inherit}</style>
+  `;
+  let html;
+  if (recipe) {
+    // Rewrite only our trusted GitHub Pages shell; recipe text is always escaped above.
+    if (!/<head>[\s\S]*?<\/head>/i.test(appHtml)) throw new Error('Recipeboy app HTML is unavailable.');
+    html = appHtml.replace(/<head>([\s\S]*?)<\/head>/i, (_, head) => `<head>\n  <base href="/">${head
+      .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '')
+      .replace(/<meta\b(?=[^>]*(?:name|property)="(?:description|og:[^"]+|twitter:[^"]+)")[^>]*>/gi, '')
+      .replace(/<link\b(?=[^>]*rel="canonical")[^>]*>/gi, '')
+      .replace(/<base\b[^>]*>/gi, '')}
+  ${metadata}</head>`);
+  } else {
+    html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  ${metadata}
+  <style>body{font:18px/1.5 system-ui,sans-serif;max-width:40rem;margin:10vh auto;padding:0 1.5rem;color:#25221d;background:#fffdf5}a{color:inherit}</style>
 </head>
 <body>
   <main>
     <p>Recipeboy</p>
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(description)}</p>
-    ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}">` : ''}
-    <p><a href="${escapeHtml(appUrl)}">${recipe ? 'Open recipe in Recipeboy' : 'Browse the recipe box'}</a></p>
+    <p><a href="${site}/">Browse the recipe box</a></p>
   </main>
-  ${recipe ? `<script nonce="${nonce}">location.replace(${JSON.stringify(appUrl)});</script>` : ''}
 </body>
 </html>`;
+  }
   return new Response(request.method === 'HEAD' ? null : html, {
     status: recipe ? 200 : 404,
     headers: {
@@ -68,7 +83,8 @@ export function recipeShareResponse({ request, id, recipe, imageUrl = '' }) {
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
-      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src https: http:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
+      // The app shell keeps its existing CSP meta tag for scripts, auth, and assets.
+      'Content-Security-Policy': "frame-ancestors 'none'",
     },
   });
 }

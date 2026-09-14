@@ -1,7 +1,7 @@
 import { normalizeYield } from '../recipe-metadata.js';
 import { parseDuration } from '../duration.js';
 import { componentIds, validateComponentIds } from '../recipe-components.js';
-import { recipeShareResponse } from './share-page.js';
+import { recipeShareResponse, recipeSite } from './share-page.js';
 
 const MAX_INPUT = 50_000;
 const MAX_PAGE = 2_000_000;
@@ -1442,20 +1442,26 @@ async function rateLimit(request, limiter, message) {
   return success ? null : json({ error: message }, 429);
 }
 
-async function serveRecipeShare(request, id, env) {
+async function serveRecipePage(request, id, env) {
   const row = await env.DB.prepare('SELECT title, data_json FROM recipes WHERE id = ? AND deleted_at IS NULL').bind(id).first();
   if (!row) return recipeShareResponse({ request, id });
   const recipe = { ...JSON.parse(row.data_json), title: row.title };
   const photo = await env.DB.prepare('SELECT object_key FROM recipe_photos WHERE recipe_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1').bind(id).first();
   let imageUrl = '';
-  if (photo) imageUrl = `${new URL(request.url).origin}/photos/${encodeURIComponent(photo.object_key)}`;
+  if (photo) imageUrl = `https://recipeboy-api.bensonperry.workers.dev/photos/${encodeURIComponent(photo.object_key)}`;
   else if (recipe.imageUrl) {
     try {
       const sourceImage = validatePublicUrl(recipe.imageUrl);
       if (!sourceImage.username && !sourceImage.password) imageUrl = sourceImage.href;
     } catch {}
   }
-  return recipeShareResponse({ request, id, recipe, imageUrl });
+  // Only /recipe/* is routed through this Worker; / remains the GitHub Pages origin.
+  // Do not forward visitor cookies or Authorization to the public app-shell fetch.
+  const shell = await fetch(`${recipeSite(request)}/`, { headers: { Accept: 'text/html' }, redirect: 'error' });
+  if (!shell.ok || !shell.headers.get('Content-Type')?.includes('text/html')) {
+    return new Response('Recipeboy could not load this page. Please try again.', { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+  return recipeShareResponse({ request, id, recipe, imageUrl, appHtml: await shell.text() });
 }
 
 export default {
@@ -1467,7 +1473,11 @@ export default {
       // Crawlers need recipe metadata in the first HTML response, before any JavaScript.
       if (['GET', 'HEAD'].includes(request.method) && (path === '/share' || path.startsWith('/share/'))) {
         const shareMatch = path.match(/^\/share\/([a-zA-Z0-9-]{1,100})$/);
-        return shareMatch ? await serveRecipeShare(request, shareMatch[1], env) : recipeShareResponse({ request, id: '' });
+        return shareMatch ? Response.redirect(`${recipeSite(request)}/recipe/${shareMatch[1]}`, 301) : recipeShareResponse({ request, id: '' });
+      }
+      if (['GET', 'HEAD'].includes(request.method) && (path === '/recipe' || path.startsWith('/recipe/'))) {
+        const recipeMatch = path.match(/^\/recipe\/([a-zA-Z0-9-]{1,100})$/);
+        return recipeMatch ? await serveRecipePage(request, recipeMatch[1], env) : recipeShareResponse({ request, id: '' });
       }
       if (request.method === 'GET' && path === '/') return json({ ok: true, service: 'recipeboy-api' });
       const publicPhotoMatch = path.match(/^\/photos\/(.+)$/);

@@ -37,7 +37,7 @@ async (page) => {
   const dialog = page.locator('#recipe-dialog');
   assert(await dialog.locator('[data-linked-recipe]').count() === 3, 'Meal must show three recipe links');
   await dialog.getByRole('link', { name: /Fresh pico/ }).click();
-  assert(page.url().endsWith('#recipe=pico'), 'Component must have its own permalink');
+  assert(new URL(page.url()).pathname === '/recipe/pico', 'Component must have its own permalink');
   assert(await dialog.getByRole('heading', { name: 'Part of', exact: true }).isVisible(), 'Component must show parent meal');
   await page.goBack();
   await dialog.getByRole('heading', { name: 'Taco night', exact: true }).waitFor();

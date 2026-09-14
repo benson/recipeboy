@@ -1,6 +1,8 @@
 name = "recipeboy-api"
 main = "worker.js"
 compatibility_date = "2026-08-31"
+# Dashboard-managed route: recipeboy.bensonperry.com/recipe/* -> recipeboy-api.
+# Keep route/routes unset: the deployment token cannot manage zone routes.
 
 [vars]
 CLERK_ISSUER = "https://clerk.recipeboy.bensonperry.com"
