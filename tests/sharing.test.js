@@ -135,6 +135,8 @@ test('clean paths and legacy hash links identify the same recipe without accepti
 
 test('an unavailable app origin fails explicitly without returning a broken successful page', async (t) => {
   const { request } = setup(t);
-  t.mock.method(globalThis, 'fetch', async () => new Response('Unavailable', { status: 503 }));
-  assert.equal((await request()).status, 502);
+  for (const status of [302, 503]) {
+    t.mock.method(globalThis, 'fetch', async () => new Response('Unavailable', { status, headers: { Location: 'https://example.com/' } }));
+    assert.equal((await request()).status, 502);
+  }
 });

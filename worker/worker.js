@@ -1457,7 +1457,7 @@ async function serveRecipePage(request, id, env) {
   }
   // Only /recipe/* is routed through this Worker; / remains the GitHub Pages origin.
   // Do not forward visitor cookies or Authorization to the public app-shell fetch.
-  const shell = await fetch(`${recipeSite(request)}/`, { headers: { Accept: 'text/html' }, redirect: 'error' });
+  const shell = await fetch(`${recipeSite(request)}/`, { headers: { Accept: 'text/html' }, redirect: 'manual' });
   if (!shell.ok || !shell.headers.get('Content-Type')?.includes('text/html')) {
     return new Response('Recipeboy could not load this page. Please try again.', { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
   }
