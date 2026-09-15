@@ -67,19 +67,30 @@ button { color: inherit; }
 .hero-add-slot .add-recipe-button:active { transform: scale(.98) rotate(-.4deg); }
 .add-recipe-button:focus-visible, .toolbar-brand:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
 .add-recipe-button:disabled { opacity: .65; cursor: wait; }
-.toolbar-add-slot .add-recipe-button { min-height: 44px; padding: 7px 13px; background: var(--red); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); font-size: 13px; }
-.toolbar-add-slot .add-recipe-button:active { transform: translateY(1px); box-shadow: 2px 2px 0 var(--navy); }
+.toolbar-add-slot .add-recipe-button { --toolbar-button-fill: var(--red); padding: 7px 13px; }
 .toolbar-add-slot .add-recipe-art { display: none; }
 .toolbar-add-slot .add-recipe-compact-label { display: inline; }
 .auth-controls:not([hidden]) { transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
-.public-controls { padding: 4px 5px 4px 11px; color: var(--navy); background: var(--white); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
+.public-controls { padding: 4px 5px 4px 11px; color: var(--navy); background: var(--white); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--white), 3px 3px 0 1px var(--navy); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; transition: opacity 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
 .public-controls button { min-height: 30px; padding: 4px 12px; color: var(--white); background: var(--blue); border: 0; border-radius: 999px; font-weight: 900; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
 .public-controls button:active { transform: scale(.96); }
-.account-button, .stats-button, .feed-button { min-height: 42px; border: 3px solid var(--navy); font-weight: 900; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
-.account-button { display: inline-flex; align-items: center; gap: 8px; max-width: 190px; padding: 4px 12px 4px 5px; color: var(--navy); background: var(--white); border-radius: 999px; box-shadow: 3px 3px 0 var(--navy); }
+.account-button, .stats-button, .feed-button, .toolbar-add-slot .add-recipe-button {
+  --toolbar-shadow-offset: 3px;
+  min-height: 44px;
+  background: var(--toolbar-button-fill, var(--white));
+  border: 3px solid var(--navy);
+  border-radius: 999px;
+  box-shadow: var(--toolbar-shadow-offset) var(--toolbar-shadow-offset) 0 var(--toolbar-button-fill, var(--white)), var(--toolbar-shadow-offset) var(--toolbar-shadow-offset) 0 1px var(--navy);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 140ms cubic-bezier(.23,1,.32,1), box-shadow 140ms cubic-bezier(.23,1,.32,1);
+}
+.account-button { display: inline-flex; align-items: center; gap: 8px; max-width: 190px; padding: 4px 12px 4px 5px; color: var(--navy); }
 #account-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-avatar { display: block; width: 30px; height: 30px; }
-.account-button:active, .stats-button:active, .feed-button:active { transform: scale(.97); }
+.account-button:active, .stats-button:active, .feed-button:active, .toolbar-add-slot .add-recipe-button:active { --toolbar-shadow-offset: 1px; transform: translate(2px, 2px); }
+.account-button:focus-visible, .stats-button:focus-visible, .feed-button:focus-visible, .toolbar-add-slot .add-recipe-button:focus-visible { outline: 3px solid var(--blue); outline-offset: 6px; }
 
 .hero::after {
   content: "";
@@ -125,8 +136,8 @@ main { width: min(1120px, calc(100% - 36px)); margin: 20px auto 72px; }
 
 .collection-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 .collection-title-wrap { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; gap: 15px; }
-.stats-button, .feed-button { flex: none; padding: 8px 12px; color: var(--navy); background: var(--yellow); border: 3px solid var(--navy); border-radius: 999px; box-shadow: 3px 3px 0 var(--red); font-size: 12px; font-weight: 900; cursor: pointer; }
-.feed-button { color: var(--white); background: var(--blue); box-shadow-color: var(--navy); }
+.stats-button, .feed-button { flex: none; padding: 8px 12px; color: var(--navy); --toolbar-button-fill: var(--yellow); }
+.feed-button { color: var(--white); --toolbar-button-fill: var(--blue); }
 .stats-label-short { display: none; }
 
 form { display: grid; grid-template-columns: minmax(0, 1fr) 190px; align-items: center; gap: 15px; padding: 13px 20px 15px; }
@@ -717,10 +728,11 @@ footer { height: 12px; background: var(--navy); }
   .toolbar-brand { display: block; visibility: visible; margin-right: auto; font-size: 17px; }
   .is-docked .toolbar-brand { display: none; }
   .auth-controls, .public-controls { gap: 5px; }
-  .account-button { min-height: 40px; padding: 3px 5px; }
+  .account-button, .stats-button, .feed-button, .toolbar-add-slot .add-recipe-button { min-height: 42px; }
+  .account-button { padding: 3px 5px; }
   .account-button #account-label { display: none; }
-  .stats-button, .feed-button { min-height: 40px; padding: 6px 8px; font-size: 11px; }
-  .toolbar-add-slot .add-recipe-button { min-height: 40px; padding: 6px 9px; font-size: 11px; }
+  .stats-button, .feed-button { padding: 6px 8px; font-size: 11px; }
+  .toolbar-add-slot .add-recipe-button { padding: 6px 9px; font-size: 11px; }
   .stats-label-full { display: none; }
   .stats-label-short { display: inline; }
   .auth-gate { align-items: center; flex-direction: column; padding: 20px; text-align: center; }
@@ -799,8 +811,7 @@ footer { height: 12px; background: var(--navy); }
 
 @media (hover: hover) and (pointer: fine) {
   .hero-add-slot .add-recipe-button:hover { transform: scale(1.035) rotate(-1deg); }
-  .toolbar-add-slot .add-recipe-button:hover { transform: translateY(-1px); box-shadow: 3px 4px 0 var(--navy); }
-  .account-button:hover, .stats-button:hover, .feed-button:hover { transform: translateY(-1px); }
+  .account-button:hover:not(:active), .stats-button:hover:not(:active), .feed-button:hover:not(:active), .toolbar-add-slot .add-recipe-button:hover:not(:active) { --toolbar-shadow-offset: 4px; transform: translate(-1px, -1px); }
   .star-choice:hover { color: var(--red); transform: translateY(-2px); }
   .avatar-option:hover { border-color: var(--navy); }
   .detail-more-button:hover { box-shadow: 4px 4px 0 var(--blue); transform: none; }
